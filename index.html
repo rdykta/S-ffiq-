@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prost – das Trinkspiel</title>
+<style>
+  :root{
+    --bg:#1B0F2B; --bg2:#26153B; --ink:#FFF3DC; --mute:#A392BD;
+    --gold:#F5B82E; --pink:#FF4F8B; --line:rgba(255,243,220,.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.4;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #app{min-height:100%;max-width:520px;margin:0 auto;padding:20px 18px 40px;display:flex;flex-direction:column;gap:18px}
+  h1{font-size:clamp(34px,10vw,56px);line-height:.95;letter-spacing:-.03em;font-weight:900}
+  h2{font-size:clamp(26px,7.5vw,38px);line-height:1.05;letter-spacing:-.02em;font-weight:800}
+  p{color:var(--mute)}
+  .top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:10px}
+  .top b{font-size:14px;color:var(--gold);letter-spacing:.08em}
+  .top span{font-size:14px;color:var(--mute)}
+  input{
+    width:100%;font:inherit;font-size:20px;padding:14px 16px;border-radius:14px;
+    background:var(--bg2);color:var(--ink);border:2px solid var(--line);outline:none
+  }
+  input:focus{border-color:var(--gold)}
+  input.code{text-transform:uppercase;letter-spacing:.3em;text-align:center;font-weight:800;font-size:28px}
+  button{
+    font:inherit;font-weight:800;font-size:18px;padding:16px 18px;border-radius:16px;border:0;cursor:pointer;
+    background:var(--gold);color:#2A1A05;width:100%;transition:transform .08s
+  }
+  button:active{transform:scale(.97)}
+  button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+  button.alt{background:var(--bg2);color:var(--ink);border:2px solid var(--line)}
+  button.pink{background:var(--pink);color:#fff}
+  button.small{font-size:14px;padding:9px 12px;width:auto;border-radius:10px}
+  button[disabled]{opacity:.45;cursor:default}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .card{background:var(--bg2);border-radius:18px;padding:16px}
+  .code-big{font-size:clamp(56px,20vw,96px);font-weight:900;letter-spacing:.12em;line-height:1;color:var(--gold);text-align:center;padding:16px 0 6px}
+  .players{display:flex;flex-direction:column;gap:6px}
+  .pl{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg2)}
+  .pl .n{flex:1;font-weight:700;font-size:17px}
+  .pl .d{font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums}
+  .pl .d::after{content:" 🍺";font-size:14px}
+  .pl.off{opacity:.45}
+  .pl.host .n::after{content:" · Roundmaster";color:var(--pink);font-weight:600;font-size:13px}
+  .pl.me{outline:2px solid var(--line)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--mute)}
+  .dot.on{background:#54E07E}
+  .cats{display:flex;flex-wrap:wrap;gap:8px}
+  .cat{padding:9px 14px;border-radius:999px;border:2px solid var(--line);color:var(--mute);font-weight:700;font-size:15px;background:transparent;width:auto}
+  .cat.on{border-color:var(--gold);color:var(--gold)}
+  .q{text-align:center;padding:22px 0 8px}
+  .q .lab{color:var(--pink);font-weight:700;font-size:15px;margin-bottom:12px}
+  .q h2{font-size:clamp(28px,8vw,40px)}
+  .wait{color:var(--mute);text-align:center;font-size:15px}
+  .vote{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .vote button{padding:22px 10px;font-size:20px}
+  .big{font-size:clamp(48px,16vw,80px);font-weight:900;line-height:1;text-align:center;color:var(--gold)}
+  .drinkers{display:flex;flex-direction:column;gap:8px}
+  .dr{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:14px;background:var(--pink);color:#fff;font-weight:800;font-size:19px}
+  .dr.you{box-shadow:0 0 0 3px var(--ink) inset}
+  .bar{display:flex;align-items:center;gap:10px;font-size:15px}
+  .bar .t{width:34%;color:var(--mute);text-align:right}
+  .bar .b{height:12px;background:var(--gold);border-radius:6px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--pink);color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .hostbar{border-top:1px solid var(--line);padding-top:14px}
+  .center{text-align:center}
+  .end .pl{padding:14px 16px}
+  .end .rank{width:28px;font-weight:900;color:var(--mute)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+<script>
+const $ = document.getElementById("app");
+const toastEl = document.getElementById("toast");
+let ws, S = null, myName = sessionStorage.getItem("name") || "", pending = false, guessVal = "";
+const urlCode = (new URLSearchParams(location.search).get("code") || "").toUpperCase().slice(0,4);
+if (urlCode) history.replaceState(null, "", location.pathname);
+
+function toast(m){ toastEl.textContent=m; toastEl.classList.add("show"); setTimeout(()=>toastEl.classList.remove("show"),2500); }
+function send(o){ if(ws && ws.readyState===1) ws.send(JSON.stringify(o)); }
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function connect(){
+  const proto = location.protocol==="https:"?"wss":"ws";
+  ws = new WebSocket(`${proto}://${location.host}`);
+  ws.onopen = ()=>{
+    const code=sessionStorage.getItem("code"), id=sessionStorage.getItem("id");
+    if(code && id) send({t:"rejoin",code,id});
+  };
+  ws.onmessage = (e)=>{
+    const m = JSON.parse(e.data);
+    if(m.t==="joined"){ sessionStorage.setItem("code",m.code); sessionStorage.setItem("id",m.id); }
+    if(m.t==="state"){ S=m.s; pending=false; render(); }
+    if(m.t==="error"){ toast(m.m); pending=false; }
+    if(m.t==="reset"){ sessionStorage.removeItem("code"); sessionStorage.removeItem("id"); S=null; renderStart(); }
+  };
+  ws.onclose = ()=>{ clearInterval(ws.ping); setTimeout(connect,1200); };
+  ws.ping = setInterval(()=>send({t:"ping"}), 25000);
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && ws.readyState!==1) connect(); }, {once:true});
+}
+
+// ---------- Screens ----------
+function renderStart(){
+  $.innerHTML = `
+    <div style="padding-top:8vh"></div>
+    <h1>${urlCode?"Du bist<br>eingeladen.":"Prost.<br>Das Trinkspiel<br>für alle Handys."}</h1>
+    <p>${urlCode?`Runde <b style="color:var(--gold)">${esc(urlCode)}</b> wartet. Name eingeben, rein da.`:"Einer erstellt die Runde, die anderen bekommen einen Link. Kein Account, keine Werbung. Wer daneben liegt, trinkt."}</p>
+    <div class="stack">
+      <input id="name" maxlength="16" placeholder="Dein Name" value="${esc(myName)}" autofocus>
+      ${urlCode?`<button id="join">Runde ${esc(urlCode)} beitreten</button><input id="code" type="hidden" value="${esc(urlCode)}"><button id="create" class="alt small">Lieber eigene Runde erstellen</button>`
+      :`<button id="create">Neue Runde erstellen</button>
+      <div class="row">
+        <input id="code" class="code" maxlength="4" placeholder="CODE" style="flex:0 0 46%">
+        <button id="join" class="alt">Beitreten</button>
+      </div>`}
+    </div>
+    <p style="font-size:13px">Bitte trinkt verantwortungsvoll. Wasser ist auch ein Getränk.</p>`;
+  const name = ()=>{ const v=document.getElementById("name").value.trim(); if(!v){toast("Name fehlt.");return null;} sessionStorage.setItem("name",v); myName=v; return v; };
+  document.getElementById("create").onclick=()=>{ const n=name(); if(n) send({t:"create",name:n}); };
+  document.getElementById("join").onclick=()=>{ const n=name(); const c=document.getElementById("code").value; if(n&&c.length===4) send({t:"join",name:n,code:c}); else if(n) toast("Code hat 4 Zeichen."); };
+  document.getElementById("code").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("join").click(); });
+  document.getElementById("name").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById(urlCode?"join":"create").click(); });
+}
+
+function me(){ return S.players.find(p=>p.id===S.you); }
+function isHost(){ return S.hostId===S.you; }
+
+function playerList(opts={}){
+  return `<div class="players">${S.players.map(p=>`
+    <div class="pl ${p.connected?"":"off"} ${p.id===S.hostId?"host":""} ${p.id===S.you?"me":""}">
+      <span class="dot ${p.connected?"on":""}"></span>
+      <span class="n">${esc(p.name)}${opts.answered && p.answered?" ✓":""}</span>
+      <span class="d">${p.drinks}</span>
+      ${opts.manage && isHost() && p.id!==S.you ? `<button class="small alt" data-host="${p.id}">Roundmaster</button><button class="small alt" data-kick="${p.id}">✕</button>`:""}
+    </div>`).join("")}</div>`;
+}
+function bindManage(){
+  $.querySelectorAll("[data-host]").forEach(b=>b.onclick=()=>send({t:"host",id:b.dataset.host}));
+  $.querySelectorAll("[data-kick]").forEach(b=>b.onclick=()=>{ if(confirm("Spieler rauswerfen?")) send({t:"kick",id:b.dataset.kick}); });
+}
+
+function header(){
+  return `<div class="top"><b>CODE ${S.code}</b><span>${S.round?`Runde ${S.round}`:"Lobby"} · ${esc(me().name)} · ${me().drinks} 🍺</span></div>`;
+}
+
+function renderLobby(){
+  $.innerHTML = `
+    ${header()}
+    <div>
+      <p class="center">Freunde geben diesen Code ein:</p>
+      <div class="code-big">${S.code}</div>
+      <div class="row"><button id="share">Einladungslink teilen</button><button id="copy" class="alt" style="flex:0 0 38%">Kopieren</button></div>
+      <p class="center" style="font-size:13px;margin-top:8px">${location.host}</p>
+    </div>
+    ${playerList({manage:true})}
+    ${isHost()?`
+      <div class="stack hostbar">
+        <p>Kategorien (Roundmaster wählt):</p>
+        <div class="cats">${Object.entries(S.cats).map(([k,v])=>`<button class="cat ${S.categories.includes(k)?"on":""}" data-cat="${k}">${v}</button>`).join("")}</div>
+        <button id="start" ${S.players.filter(p=>p.connected).length<2?"disabled":""}>Spiel starten</button>
+      </div>`
+    :`<p class="wait">Warten, bis der Roundmaster startet…</p>`}`;
+  bindManage();
+  const link = `${location.origin}${location.pathname}?code=${S.code}`;
+  const copy = async()=>{ try{ await navigator.clipboard.writeText(link); toast("Link kopiert."); }catch{ prompt("Link kopieren:", link); } };
+  document.getElementById("copy").onclick=copy;
+  document.getElementById("share").onclick=async()=>{
+    if(navigator.share){ try{ await navigator.share({title:"Prost – Trinkspiel", text:`Komm in meine Runde ${S.code}:`, url:link}); }catch{} }
+    else copy();
+  };
+  $.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{
+    let c=S.categories.slice(); const k=b.dataset.cat;
+    c = c.includes(k)? c.filter(x=>x!==k) : [...c,k];
+    if(!c.length){toast("Mindestens eine Kategorie.");return;}
+    send({t:"categories",cats:c});
+  });
+  const st=document.getElementById("start"); if(st) st.onclick=()=>send({t:"start"});
+}
+
+function renderQuestion(){
+  const c=S.current, m=me(), answered=m.answered;
+  let body="";
+  const nameOf=id=>(S.players.find(p=>p.id===id)||{}).name||"?";
+
+  if(c.type==="wop"){
+    const isTarget=c.target===S.you;
+    if(c.stage==="choose"){
+      body = `<div class="q"><div class="lab">${esc(c.label)}</div><h2>${isTarget?"Du bist dran.":esc(nameOf(c.target))+" ist dran."}</h2></div>`
+        + (isTarget?`<div class="vote"><button data-a="wahrheit">Wahrheit</button><button class="pink" data-a="pflicht">Pflicht</button></div>`:`<p class="wait">Wartet auf die Entscheidung…</p>`);
+    } else {
+      body = `<div class="q"><div class="lab">${esc(nameOf(c.target))} · ${c.choice==="wahrheit"?"Wahrheit":"Pflicht"}</div><h2>${esc(c.task)}</h2></div>`
+        + (isHost()?`<div class="row"><button id="done">Erledigt</button><button id="ref" class="pink">Gekniffen (3 🍺)</button></div>`:`<p class="wait">Der Roundmaster entscheidet, ob es zählt.</p>`);
+    }
+  } else if(c.type==="nie"){
+    body = `<div class="q"><div class="lab">${esc(c.label)}</div><h2>${esc(c.text)}</h2></div>`
+      + (answered?wait():`<div class="vote"><button class="pink" data-a="ja">Hab ich</button><button data-a="nein">Hab ich nie</button></div>`);
+  } else if(c.type==="wer"){
+    body = `<div class="q"><div class="lab">${esc(c.label)}</div><h2>${esc(c.text)}</h2></div>`
+      + (answered?wait():`<div class="vote">${S.players.filter(p=>p.connected).map(p=>`<button class="alt" data-a="${p.id}">${esc(p.name)}</button>`).join("")}</div>`);
+  } else if(c.type==="oder"){
+    body = `<div class="q"><div class="lab">${esc(c.label)}</div><h2>Was nimmst du?</h2></div>`
+      + (answered?wait():`<div class="vote"><button data-a="0">${esc(c.options[0])}</button><button class="pink" data-a="1">${esc(c.options[1])}</button></div>`);
+  } else if(c.type==="schaetz"){
+    body = `<div class="q"><div class="lab">${esc(c.label)}</div><h2>${esc(c.text)}</h2></div>`
+      + (answered?wait():`<div class="row"><input id="g" type="number" inputmode="decimal" step="any" placeholder="Deine Schätzung${c.unit?" in "+c.unit:""}" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 38%">Abgeben</button></div>`);
+  }
+
+  $.innerHTML = `${header()}${body}${playerList({answered:true})}
+    ${isHost()?`<div class="row hostbar">${c.type!=="wop"?`<button class="alt small" id="force">Auswerten</button>`:""}<button class="alt small" id="skip">Frage überspringen</button></div>`:""}`;
+
+  $.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{ if(pending)return; pending=true; send({t:"answer",v:b.dataset.a}); });
+  const g=document.getElementById("g"), gs=document.getElementById("gs");
+  if(gs){ g.oninput=()=>guessVal=g.value; g.focus();
+    const go=()=>{ if(g.value===""){toast("Zahl eingeben.");return;} send({t:"answer",v:Number(g.value)}); guessVal=""; };
+    gs.onclick=go; g.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); }); }
+  const d=document.getElementById("done"); if(d) d.onclick=()=>send({t:"wopDone",refused:false});
+  const r=document.getElementById("ref"); if(r) r.onclick=()=>send({t:"wopDone",refused:true});
+  const f=document.getElementById("force"); if(f) f.onclick=()=>send({t:"force"});
+  const s=document.getElementById("skip"); if(s) s.onclick=()=>send({t:"skip"});
+
+  function wait(){ const n=S.players.filter(p=>p.connected&&!p.answered).length; return `<p class="wait">Abgegeben. Noch ${n} ${n===1?"Antwort":"Antworten"} offen…</p>`; }
+}
+
+function renderResults(){
+  const r=S.result; let extra="";
+  if(r.type==="schaetz"){
+    extra = `<div class="card stack"><div class="center"><p>Richtige Antwort</p><div class="big">${r.answer}${r.unit?` <span style="font-size:.4em;color:var(--mute)">${esc(r.unit)}</span>`:""}</div></div>
+      ${r.guesses.map(g=>`<div class="bar"><span class="t">${esc(g.name)}</span><span>${g.guess}</span></div>`).join("")}</div>`;
+  }
+  if(r.votes){
+    const max=Math.max(1,...r.votes.map(v=>v.n));
+    extra = `<div class="card stack">${r.votes.map(v=>`<div class="bar"><span class="t">${esc(v.name)}</span><span class="b" style="width:${Math.round(v.n/max*50)}%"></span><span>${v.n}</span></div>`).join("")}</div>`;
+  }
+  const meDrinks = r.drinkers.find(d=>d.id===S.you);
+  $.innerHTML = `${header()}
+    <div class="q"><div class="lab">${esc(S.current.label)}</div><h2 style="font-size:22px;font-weight:600;color:var(--mute)">${esc(r.text)}</h2></div>
+    ${extra}
+    <div class="stack">
+      <h2 class="center">${meDrinks?`Du trinkst ${meDrinks.n}.`:(r.drinkers.length?"Prost, ihr anderen.":"Alle safe.")}</h2>
+      <p class="center">${esc(r.lines.join(" "))}</p>
+      <div class="drinkers">${r.drinkers.map(d=>`<div class="dr ${d.id===S.you?"you":""}"><span>${esc(d.name)}</span><span>${d.n} 🍺</span></div>`).join("")}</div>
+    </div>
+    ${playerList()}
+    ${isHost()?`<div class="stack hostbar"><button id="next">Nächste Runde</button><button id="end" class="alt small">Spiel beenden</button></div>`:`<p class="wait">Der Roundmaster startet die nächste Runde.</p>`}`;
+  const n=document.getElementById("next"); if(n) n.onclick=()=>send({t:"next"});
+  const e=document.getElementById("end"); if(e) e.onclick=()=>{ if(confirm("Spiel wirklich beenden?")) send({t:"end"}); };
+}
+
+function renderEnd(){
+  const sorted=S.players.slice().sort((a,b)=>b.drinks-a.drinks);
+  $.innerHTML = `${header()}
+    <h1>Feierabend.</h1>
+    <p>${S.round} Runden. Hier die Bilanz:</p>
+    <div class="players end">${sorted.map((p,i)=>`<div class="pl ${p.id===S.you?"me":""}"><span class="rank">${i+1}.</span><span class="n">${esc(p.name)}</span><span class="d">${p.drinks}</span></div>`).join("")}</div>
+    <button id="again" class="alt">Zurück zum Start</button>`;
+  document.getElementById("again").onclick=()=>{ sessionStorage.removeItem("code"); sessionStorage.removeItem("id"); S=null; renderStart(); };
+}
+
+function render(){
+  if(!S) return renderStart();
+  if(S.phase==="lobby") return renderLobby();
+  if(S.phase==="question") return renderQuestion();
+  if(S.phase==="results") return renderResults();
+  if(S.phase==="end") return renderEnd();
+}
+renderStart();
+connect();
+</script>
+</body>
+</html>
