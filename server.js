@@ -51,13 +51,39 @@ function lev(a, b) {
     d[i][k] = Math.min(d[i - 1][k] + 1, d[i][k - 1] + 1, d[i - 1][k - 1] + (a[i - 1] === b[k - 1] ? 0 : 1));
   return d[m][n];
 }
-function matchesPerson(guess, person) {
-  const g = norm(guess); if (g.length < 3) return false;
-  const full = norm(person.name);
-  const cands = [full, ...person.alt.map(norm)];
+const STOP = new Set(["the","a","an","der","die","das","ein","eine","und","and","of","feat","ft","mit","von","i","you","me","my","in","on","to","it"]);
+function words(n) { return n.split(" ").filter((w) => w.length >= 3 && !STOP.has(w)); }
+// target: { name, alt: [] }  → Kandidaten: voller Name, Alternativen, Nachname (bei Personen)
+function candidates(target, isPerson) {
+  const full = norm(target.name).replace(/\(.*?\)/g, " ").replace(/\s+/g, " ").trim();
+  const c = [full, ...(target.alt || []).map(norm)];
   const toks = full.split(" ");
-  if (toks.length > 1) { const last = toks[toks.length - 1]; if (last.length >= 4) cands.push(last); }
-  return cands.some((c) => c === g || (c.length >= 5 && lev(c, g) <= (c.length >= 8 ? 2 : 1)) || (toks.length > 1 && g.split(" ").length > 1 && lev(c, g) <= 2));
+  if (isPerson && toks.length > 1 && toks[toks.length - 1].length >= 4) c.push(toks[toks.length - 1]);
+  const noStop = words(full).join(" "); if (noStop && noStop !== full) c.push(noStop);
+  return c.filter(Boolean);
+}
+function matchesTarget(guess, target, isPerson) {
+  const g = norm(guess); if (g.length < 3) return false;
+  const gns = words(g).join(" ") || g;
+  return candidates(target, isPerson).some((c) => {
+    if (c === g || c === gns) return true;
+    const cw = words(c); if (cw.length > 1 && cw[0].length >= 6 && (g === cw[0] || gns === cw[0])) return true; // "Atemlos" reicht
+    const tol = c.length >= 12 ? 3 : c.length >= 8 ? 2 : c.length >= 5 ? 1 : 0;
+    return lev(c, g) <= tol || lev(c, gns) <= tol;
+  });
+}
+function nearTarget(guess, target, isPerson) {
+  const g = norm(guess); if (g.length < 3) return false;
+  const gw = words(g);
+  return candidates(target, isPerson).some((c) => {
+    if (c.length >= 6 && lev(c, g) <= Math.max(3, Math.floor(c.length / 3))) return true;
+    if (g.length >= 4 && (c.includes(g) || g.includes(c))) return true;
+    const cw = words(c);
+    return gw.some((w) => cw.some((x) => x === w || (w.length >= 4 && x.length >= 4 && (lev(w, x) <= 1 || x.startsWith(w) || w.startsWith(x)))));
+  });
+}
+function guessTarget(cur) {
+  return cur.type === "werbinich" ? { t: cur.person, person: true } : { t: { name: cur.song.t, alt: [] }, person: false };
 }
 
 function createRoom() {
@@ -86,8 +112,9 @@ function publicState(room, forId) {
     const p = room.players[id];
     return { id, name: p.name, drinks: p.drinks, connected: p.connected, answered: room.current ? room.current.answers[id] !== undefined : false };
   });
-  let cur = room.current ? { ...room.current, answers: undefined, correct: undefined, artist: undefined } : null;
+  let cur = room.current ? { ...room.current, answers: undefined, correct: undefined } : null;
   if (cur && cur.type === "werbinich") cur = { ...cur, person: undefined, hints: cur.person.hints.slice(0, cur.revealed), hintCount: cur.person.hints.length, solvedBy: Object.keys(cur.solved || {}) };
+  if (cur && cur.type === "song") cur = { ...cur, song: undefined, solvedBy: Object.keys(cur.solved || {}) };
   return {
     code: room.code,
     hostId: room.hostId,
@@ -204,9 +231,7 @@ async function nextRound(room) {
   }
   else if (cat === "song") {
     cur.text = "Welcher Song ist das?"; cur.preview = songPick.url; cur.art = songPick.art;
-    const others = shuffle(Q.song.filter((x) => x.t !== songPick.t)).slice(0, 3).map((x) => x.t);
-    const opts = shuffle([songPick.t, ...others]);
-    cur.options = opts; cur.correct = opts.indexOf(songPick.t); cur.artist = songPick.a;
+    cur.song = { t: songPick.t, a: songPick.a }; cur.chat = []; cur.solved = {};
   }
   else if (cat === "trivia") { const q = pick(room, "trivia"); cur.text = q.q; cur.options = q.o; cur.correct = q.c; }
   else if (cat === "oder") { const o = pick(room, "oder"); cur.text = "Entweder oder?"; cur.options = o; }
@@ -266,8 +291,15 @@ function resolve(room) {
     else { losers = a.length < b.length ? a : b; res.lines.push(`Mehrheit für ${a.length > b.length ? cur.options[0] : cur.options[1]}. Die Minderheit trinkt.`); }
     losers.forEach((id) => give(id, 1));
     res.drinkers = losers.map((id) => ({ id, name: P[id].name, n: 1 }));
-  } else if (cur.type === "trivia" || cur.type === "song") {
-    if (cur.type === "song") res.artist = cur.artist;
+  } else if (cur.type === "song") {
+    res.text = ""; res.answer = cur.song.t; res.artist = cur.song.a; res.chat = cur.chat;
+    const connected = room.order.filter((id) => P[id].connected);
+    connected.forEach((id) => { if (!cur.solved[id]) { give(id, 2); res.drinkers.push({ id, name: P[id].name, n: 2 }); } });
+    const solvers = connected.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
+    res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name}.` : "Keiner hat's erkannt.");
+    res.solvers = solvers.map((id) => ({ name: P[id].name }));
+    cur.timedOut = false;
+  } else if (cur.type === "trivia") {
     const wrong = ids.filter((id) => A[id] !== cur.correct);
     const right = ids.filter((id) => A[id] === cur.correct);
     res.answer = cur.options[cur.correct];
@@ -375,14 +407,17 @@ wss.on("connection", (ws) => {
       return broadcast(room);
     }
 
-    if (m.t === "guess" && room.phase === "question" && room.current.type === "werbinich") {
+    if (m.t === "guess" && room.phase === "question" && ["werbinich", "song"].includes(room.current.type)) {
       const cur = room.current, text = String(m.v || "").trim().slice(0, 60);
       if (!text || cur.solved[me]) return;
-      const name = room.players[me].name;
-      if (matchesPerson(text, cur.person)) {
-        cur.solved[me] = { hint: cur.revealed, t: Date.now() };
+      const name = room.players[me].name, tg = guessTarget(cur);
+      if (matchesTarget(text, tg.t, tg.person)) {
+        cur.solved[me] = { hint: cur.revealed || 0, t: Date.now() };
         cur.chat.push({ sys: true, text: `${name} hat es erraten!` });
-      } else cur.chat.push({ name, text });
+      } else {
+        cur.chat.push({ name, text });
+        if (nearTarget(text, tg.t, tg.person)) send({ t: "near" });
+      }
       if (cur.chat.length > 60) cur.chat.shift();
       return broadcast(room);
     }
@@ -401,7 +436,7 @@ wss.on("connection", (ws) => {
       if (cur.type === "schaetz") { const n = Number(m.v); if (!Number.isFinite(n)) return; cur.answers[me] = n; }
       else if (cur.type === "wer") { if (!room.players[m.v]) return; cur.answers[me] = m.v; }
       else if (cur.type === "oder") { cur.answers[me] = m.v === 1 ? 1 : 0; }
-      else if (cur.type === "trivia" || cur.type === "song") { const i = Number(m.v); if (![0,1,2,3].includes(i)) return; cur.answers[me] = i; }
+      else if (cur.type === "trivia") { const i = Number(m.v); if (![0,1,2,3].includes(i)) return; cur.answers[me] = i; }
       else if (cur.type === "nie") { cur.answers[me] = m.v === "ja" ? "ja" : "nein"; }
       if (allAnswered(room)) return resolve(room);
       return broadcast(room);
@@ -412,7 +447,7 @@ wss.on("connection", (ws) => {
       return resolve(room);
     }
     if (m.t === "force" && isHost && room.phase === "question" && room.current.type !== "wop") {
-      if (room.current.type === "werbinich" || Object.keys(room.current.answers).length) return resolve(room);
+      if (["werbinich", "song"].includes(room.current.type) || Object.keys(room.current.answers).length) return resolve(room);
       return nextRound(room);
     }
   });
@@ -426,7 +461,7 @@ wss.on("connection", (ws) => {
       const next = room.order.find((id) => room.players[id].connected);
       if (next) room.hostId = next;
     }
-    if (room.phase === "question" && !["wop", "werbinich"].includes(room.current.type) && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
+    if (room.phase === "question" && !["wop", "werbinich", "song"].includes(room.current.type) && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
     else broadcast(room);
     // Leere Räume nach 10 Minuten aufräumen
     setTimeout(() => {
