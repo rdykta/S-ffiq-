@@ -146,14 +146,26 @@ function toast(m){ toastEl.textContent=m; toastEl.classList.add("show"); setTime
 function send(o){ if(ws && ws.readyState===1) ws.send(JSON.stringify(o)); }
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
+// ---------- Verbindung ----------
+// Genau eine Verbindung zur Zeit. Alle 20 s ein Ping; kommt binnen 8 s keine Antwort, gilt der Socket als tot
+// (Handy war im Standby, Proxy hat gekappt) und wird ersetzt. Zurück in der App: Stand neu holen.
+const PING_MS=20000, PONG_TIMEOUT_MS=8000, RECONNECT_MS=1200;
+let reconnectTimer=null, replyTimer=null;
+function rejoinMsg(){ const code=sessionStorage.getItem("code"), id=sessionStorage.getItem("id"); return code&&id ? {t:"rejoin",code,id} : null; }
+function expectReply(sock){
+  if(replyTimer) return;
+  replyTimer=setTimeout(()=>{ replyTimer=null; if(ws!==sock) return; ws=null; try{ sock.close(); }catch{} connect(); }, PONG_TIMEOUT_MS);
+}
+function scheduleReconnect(){ if(reconnectTimer) return; reconnectTimer=setTimeout(()=>{ reconnectTimer=null; connect(); }, RECONNECT_MS); }
 function connect(){
+  if(ws && (ws.readyState===0 || ws.readyState===1)) return; // läuft schon
+  if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
   const proto = location.protocol==="https:"?"wss":"ws";
-  ws = new WebSocket(`${proto}://${location.host}`);
-  ws.onopen = ()=>{
-    const code=sessionStorage.getItem("code"), id=sessionStorage.getItem("id");
-    if(code && id) send({t:"rejoin",code,id});
-  };
-  ws.onmessage = (e)=>{
+  const sock = new WebSocket(`${proto}://${location.host}`);
+  ws = sock;
+  sock.onopen = ()=>{ const r=rejoinMsg(); if(r){ send(r); expectReply(sock); } };
+  sock.onmessage = (e)=>{
+    if(replyTimer){ clearTimeout(replyTimer); replyTimer=null; }
     const m = JSON.parse(e.data);
     if(m.t==="joined"){ sessionStorage.setItem("code",m.code); sessionStorage.setItem("id",m.id); }
     if(m.t==="state"){ S=m.s; if(S.now) clockOffset=S.now-Date.now(); pending=false; render(); }
@@ -162,10 +174,19 @@ function connect(){
     if(m.t==="reset"){ sessionStorage.removeItem("code"); sessionStorage.removeItem("id"); S=null; renderStart(); }
     if(m.t==="draw"){ onDraw(m); }
   };
-  ws.onclose = ()=>{ clearInterval(ws.ping); setTimeout(connect,1200); };
-  ws.ping = setInterval(()=>send({t:"ping"}), 25000);
-  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && ws.readyState!==1) connect(); }, {once:true});
+  sock.onclose = ()=>{ clearInterval(sock.pingIv); if(ws===sock){ ws=null; if(replyTimer){ clearTimeout(replyTimer); replyTimer=null; } scheduleReconnect(); } };
+  sock.onerror = ()=>{}; // close folgt
+  sock.pingIv = setInterval(()=>{ if(ws!==sock || sock.readyState!==1) return; send({t:"ping"}); expectReply(sock); }, PING_MS);
 }
+// Zurück in der App (Handy entsperrt, Tab gewechselt, aus dem Cache geladen): Verbindung prüfen und Stand neu holen
+function resync(){
+  if(document.hidden) return;
+  if(!ws || ws.readyState!==1){ if(ws && ws.readyState!==0) ws=null; connect(); return; }
+  const r=rejoinMsg(); if(r){ send(r); expectReply(ws); }
+}
+document.addEventListener("visibilitychange", resync);
+window.addEventListener("pageshow", resync);
+window.addEventListener("online", resync);
 
 // ---------- Screens ----------
 function renderStart(){
