@@ -46,8 +46,12 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   Schreibweise), bekommt privat ein "Nah dran!" – in beiden Freitext-Kategorien.
 - Wer bin ich? (Bild): Artikelbild der Person aus der deutschen Wikipedia (Wikimedia Commons, mit Bildnachweis
   in der Auflösung), startet stark verschwommen und wird in 5 Stufen alle 7 Sekunden schärfer. Raten, Chat,
-  "Nah dran" und Schlücke wie bei "Wer bin ich". Eigene Personenliste in `questions.js` unter `bild`: sehr bekannte,
-  überwiegend aktuelle Personen (`{ name: "Taylor Swift", alt: ["Swift"] }`), plus ein paar Weltberühmtheiten der Geschichte.
+  "Nah dran" und Schlücke wie bei "Wer bin ich". Eigene Liste in `questions.js` unter `bild`: sehr bekannte,
+  überwiegend aktuelle Personen (`{ name: "Taylor Swift", alt: ["Swift"] }`), ein paar Weltberühmtheiten der Geschichte
+  und bekannte Zeichentrick-, Animations- und Comicfiguren (`{ name: "Homer Simpson", alt: ["Homer"], en: "Homer Simpson" }`).
+  Figuren haben in der deutschen Wikipedia meist kein Bild, deshalb kommt ihr Bild über den Suchbegriff `en` aus der
+  englischen Wikipedia (dort auch nicht-freie Figurenbilder, Nachweis in der Auflösung). Der Nachname bzw. die Figur
+  allein reicht beim Raten ("Simpson", "Homer").
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
