@@ -11,7 +11,7 @@ const rooms = new Map(); // code -> room
 // ---------- statischer Webserver ----------
 const server = http.createServer((req, res) => {
   const file = path.join(__dirname, "public", "index.html");
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, max-age=0" });
   fs.createReadStream(file).pipe(res);
 });
 const wss = new WebSocketServer({ server });
@@ -35,6 +35,7 @@ const CATS = {
   oder: "Entweder oder",
   trivia: "Trivia",
   werbinich: "Wer bin ich?",
+  song: "Song-Quiz",
 };
 const HINT_MS = 7000;
 
@@ -85,7 +86,7 @@ function publicState(room, forId) {
     const p = room.players[id];
     return { id, name: p.name, drinks: p.drinks, connected: p.connected, answered: room.current ? room.current.answers[id] !== undefined : false };
   });
-  let cur = room.current ? { ...room.current, answers: undefined, correct: undefined } : null;
+  let cur = room.current ? { ...room.current, answers: undefined, correct: undefined, artist: undefined } : null;
   if (cur && cur.type === "werbinich") cur = { ...cur, person: undefined, hints: cur.person.hints.slice(0, cur.revealed), hintCount: cur.person.hints.length, solvedBy: Object.keys(cur.solved || {}) };
   return {
     code: room.code,
@@ -124,7 +125,25 @@ function pick(room, cat) {
 
 // "Zufällig, aber nicht zufällig": gewichteter Kartenstapel, jede Kategorie kommt
 // im Verhältnis der Gewichte dran, nie zweimal hintereinander, Wahrheit/Pflicht selten.
-const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2 };
+const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2, song: 2 };
+
+// Song-Vorschau aus dem iTunes-Katalog (öffentliche Such-API, 30-Sekunden-Preview)
+const previewCache = new Map();
+async function findPreview(song) {
+  const key = song.a + "|" + song.t;
+  if (process.env.SUEFFIQ_STUB_PREVIEW) return { url: process.env.SUEFFIQ_STUB_PREVIEW, art: "" };
+  if (previewCache.has(key)) return previewCache.get(key);
+  const url = "https://itunes.apple.com/search?" + new URLSearchParams({ term: `${song.a} ${song.t}`, entity: "song", country: "DE", limit: "5" });
+  try {
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
+    const r = await fetch(url, { signal: ctrl.signal }); clearTimeout(to);
+    const d = await r.json();
+    const hit = (d.results || []).find((x) => x.previewUrl && norm(x.artistName).includes(norm(song.a).split(" ")[0])) || (d.results || []).find((x) => x.previewUrl);
+    const res = hit ? { url: hit.previewUrl, art: hit.artworkUrl100 } : null;
+    previewCache.set(key, res);
+    return res;
+  } catch (e) { return null; }
+}
 function nextCat(room) {
   const cats = room.categories;
   if (cats.length === 1) return cats[0];
@@ -152,11 +171,20 @@ function clearTimer(room) {
   if (room.hintTimer) { clearInterval(room.hintTimer); room.hintTimer = null; }
 }
 
-function nextRound(room) {
+async function nextRound(room) {
   clearTimer(room);
   room.round += 1;
   room.phase = "question";
-  const cat = nextCat(room);
+  let cat = nextCat(room);
+  let songPick = null;
+  if (cat === "song") {
+    for (let i = 0; i < 4 && !songPick; i++) {
+      const sng = pick(room, "song");
+      const pv = await findPreview(sng);
+      if (pv) songPick = { ...sng, ...pv };
+    }
+    if (!songPick) { cat = room.categories.find((c) => c !== "song") || "trivia"; room.lastCat = cat; }
+  }
   const connected = room.order.filter((id) => room.players[id].connected);
   let cur = { type: cat, label: CATS[cat], answers: {} };
 
@@ -174,6 +202,12 @@ function nextRound(room) {
       else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
     }, HINT_MS);
   }
+  else if (cat === "song") {
+    cur.text = "Welcher Song ist das?"; cur.preview = songPick.url; cur.art = songPick.art;
+    const others = shuffle(Q.song.filter((x) => x.t !== songPick.t)).slice(0, 3).map((x) => x.t);
+    const opts = shuffle([songPick.t, ...others]);
+    cur.options = opts; cur.correct = opts.indexOf(songPick.t); cur.artist = songPick.a;
+  }
   else if (cat === "trivia") { const q = pick(room, "trivia"); cur.text = q.q; cur.options = q.o; cur.correct = q.c; }
   else if (cat === "oder") { const o = pick(room, "oder"); cur.text = "Entweder oder?"; cur.options = o; }
   else if (cat === "wop") {
@@ -182,7 +216,7 @@ function nextRound(room) {
     cur.stage = "choose"; // choose -> task
   }
   if (room.timerSec > 0 && cat !== "wop" && cat !== "werbinich") {
-    const sec = cat === "schaetz" ? room.timerSec + 10 : room.timerSec;
+    const sec = cat === "schaetz" ? room.timerSec + 10 : cat === "song" ? room.timerSec + 15 : room.timerSec;
     cur.deadline = Date.now() + sec * 1000;
     cur.total = sec;
     const round = room.round;
@@ -232,7 +266,8 @@ function resolve(room) {
     else { losers = a.length < b.length ? a : b; res.lines.push(`Mehrheit für ${a.length > b.length ? cur.options[0] : cur.options[1]}. Die Minderheit trinkt.`); }
     losers.forEach((id) => give(id, 1));
     res.drinkers = losers.map((id) => ({ id, name: P[id].name, n: 1 }));
-  } else if (cur.type === "trivia") {
+  } else if (cur.type === "trivia" || cur.type === "song") {
+    if (cur.type === "song") res.artist = cur.artist;
     const wrong = ids.filter((id) => A[id] !== cur.correct);
     const right = ids.filter((id) => A[id] === cur.correct);
     res.answer = cur.options[cur.correct];
@@ -245,7 +280,7 @@ function resolve(room) {
     const connected = room.order.filter((id) => P[id].connected);
     connected.forEach((id) => {
       const sv = cur.solved[id];
-      const n = sv ? sv.hint - 1 : 3;
+      const n = sv ? 0 : 3;
       if (n > 0) { give(id, n); res.drinkers.push({ id, name: P[id].name, n }); }
     });
     const solvers = connected.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
@@ -366,7 +401,7 @@ wss.on("connection", (ws) => {
       if (cur.type === "schaetz") { const n = Number(m.v); if (!Number.isFinite(n)) return; cur.answers[me] = n; }
       else if (cur.type === "wer") { if (!room.players[m.v]) return; cur.answers[me] = m.v; }
       else if (cur.type === "oder") { cur.answers[me] = m.v === 1 ? 1 : 0; }
-      else if (cur.type === "trivia") { const i = Number(m.v); if (![0,1,2,3].includes(i)) return; cur.answers[me] = i; }
+      else if (cur.type === "trivia" || cur.type === "song") { const i = Number(m.v); if (![0,1,2,3].includes(i)) return; cur.answers[me] = i; }
       else if (cur.type === "nie") { cur.answers[me] = m.v === "ja" ? "ja" : "nein"; }
       if (allAnswered(room)) return resolve(room);
       return broadcast(room);

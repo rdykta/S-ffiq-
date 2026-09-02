@@ -37,8 +37,12 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 - Trivia: 4 Antworten, wer falsch liegt trinkt 1
 - Wer bin ich?: 4 Tipps im 7-Sekunden-Takt (allgemein → eindeutig), Freitext.
   Falsche Tipps landen im Chat für alle, richtige werden als "[Name] hat es erraten!" gemeldet.
-  Nach dem letzten Tipp bleiben 7 Sekunden. Erraten bei Tipp 1/2/3/4 = 0/1/2/3 Schlücke, nicht erraten = 3.
+  Nach dem letzten Tipp bleiben 7 Sekunden. Richtig erraten = 0 Schlücke, nicht erraten = 3.
   Nachname reicht, kleine Tippfehler werden toleriert.
+- Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
+  4 Titel zur Auswahl, wer falsch liegt trinkt 1. Jedes Handy hat einen Abspielen-Button; am besten spielt
+  der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
+  Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`).
 - Roundmaster kann auswerten, überspringen, Roundmaster übergeben oder
   Spieler rauswerfen. Verlässt der Roundmaster das Spiel, rückt der nächste nach.
 - Handy kurz zu? Seite neu laden, man landet wieder in der Runde.
