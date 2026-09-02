@@ -60,6 +60,8 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   (`{ name: "Fahrrad", alt: ["Rad"] }`).
 - Roundmaster kann auswerten, überspringen, Roundmaster übergeben oder
   Spieler rauswerfen. Verlässt der Roundmaster das Spiel, rückt der nächste nach.
+- Jeder Knopfdruck während einer Runde (Antworten, Raten, Zeichenwerkzeuge, Auswerten, Nächste Runde) gibt ein kurzes,
+  helles Plopp als Bestätigung. Kommt aus dem Browser selbst (Web Audio), keine Audiodatei nötig; Handy auf lautlos = kein Ton.
 - Handy kurz zu? Seite neu laden, man landet wieder in der Runde.
 
 ## Eigene Fragen
