@@ -40,6 +40,9 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   Nach dem letzten Tipp bleiben 7 Sekunden. Richtig erraten = 0 Schlücke, nicht erraten = 3.
   Nachname reicht, kleine Tippfehler werden toleriert. Wer nah dran ist (Teilwort, Vorname, ähnliche
   Schreibweise), bekommt privat ein "Nah dran!" – in beiden Freitext-Kategorien.
+- Wer bin ich? (Bild): Artikelbild der Person aus der deutschen Wikipedia (Wikimedia Commons, mit Bildnachweis
+  in der Auflösung), startet stark verschwommen und wird in 5 Stufen alle 7 Sekunden schärfer. Raten, Chat,
+  "Nah dran" und Schlücke wie bei "Wer bin ich". Nutzt dieselbe Personenliste (`werbinich`).
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.

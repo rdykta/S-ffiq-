@@ -36,7 +36,9 @@ const CATS = {
   trivia: "Trivia",
   werbinich: "Wer bin ich?",
   song: "Song-Quiz",
+  bild: "Wer bin ich? (Bild)",
 };
+const BLUR_STAGES = 5;
 const HINT_MS = 7000;
 
 // Freitext-Vergleich: Akzente/Satzzeichen weg, Nachname reicht, kleine Tippfehler ok
@@ -83,7 +85,7 @@ function nearTarget(guess, target, isPerson) {
   });
 }
 function guessTarget(cur) {
-  return cur.type === "werbinich" ? { t: cur.person, person: true } : { t: { name: cur.song.t, alt: [] }, person: false };
+  return cur.type === "werbinich" || cur.type === "bild" ? { t: cur.person, person: true } : { t: { name: cur.song.t, alt: [] }, person: false };
 }
 
 function createRoom() {
@@ -115,6 +117,7 @@ function publicState(room, forId) {
   let cur = room.current ? { ...room.current, answers: undefined, correct: undefined } : null;
   if (cur && cur.type === "werbinich") cur = { ...cur, person: undefined, hints: cur.person.hints.slice(0, cur.revealed), hintCount: cur.person.hints.length, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "song") cur = { ...cur, song: undefined, solvedBy: Object.keys(cur.solved || {}) };
+  if (cur && cur.type === "bild") cur = { ...cur, person: undefined, page: undefined, stages: BLUR_STAGES, solvedBy: Object.keys(cur.solved || {}) };
   return {
     code: room.code,
     hostId: room.hostId,
@@ -152,7 +155,29 @@ function pick(room, cat) {
 
 // "Zufällig, aber nicht zufällig": gewichteter Kartenstapel, jede Kategorie kommt
 // im Verhältnis der Gewichte dran, nie zweimal hintereinander, Wahrheit/Pflicht selten.
-const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2, song: 2 };
+const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2, song: 2, bild: 2 };
+
+// Personenbild aus der deutschen Wikipedia (Artikelbild, i. d. R. Wikimedia Commons, frei lizenziert)
+const imageCache = new Map();
+async function findImage(person) {
+  if (process.env.SUEFFIQ_STUB_IMAGE) return { url: process.env.SUEFFIQ_STUB_IMAGE, page: person.name };
+  if (imageCache.has(person.name)) return imageCache.get(person.name);
+  const names = [person.name, ...person.alt];
+  for (const n of names.slice(0, 2)) {
+    const url = "https://de.wikipedia.org/w/api.php?" + new URLSearchParams({ action: "query", generator: "search", gsrsearch: n, gsrlimit: "1", gsrnamespace: "0", prop: "pageimages", piprop: "thumbnail|name", pithumbsize: "640", format: "json" });
+    try {
+      const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
+      const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "SueffIQ/1.0 (Partyspiel; Wikipedia-Artikelbilder)" } }); clearTimeout(to);
+      const d = await r.json();
+      const pg = Object.values((d.query || {}).pages || {})[0];
+      if (pg && pg.thumbnail && pg.thumbnail.source) {
+        const res = { url: pg.thumbnail.source, page: pg.title };
+        imageCache.set(person.name, res); return res;
+      }
+    } catch (e) { /* nächster Versuch */ }
+  }
+  imageCache.set(person.name, null); return null;
+}
 
 // Song-Vorschau aus dem iTunes-Katalog (öffentliche Such-API, 30-Sekunden-Preview)
 const previewCache = new Map();
@@ -212,6 +237,15 @@ async function nextRound(room) {
     }
     if (!songPick) { cat = room.categories.find((c) => c !== "song") || "trivia"; room.lastCat = cat; }
   }
+  let bildPick = null;
+  if (cat === "bild") {
+    for (let i = 0; i < 4 && !bildPick; i++) {
+      const per = pick(room, "werbinich");
+      const im = await findImage(per);
+      if (im) bildPick = { person: per, ...im };
+    }
+    if (!bildPick) { cat = room.categories.find((c) => !["bild", "song"].includes(c)) || "trivia"; room.lastCat = cat; }
+  }
   const connected = room.order.filter((id) => room.players[id].connected);
   let cur = { type: cat, label: CATS[cat], answers: {} };
 
@@ -229,6 +263,17 @@ async function nextRound(room) {
       else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
     }, HINT_MS);
   }
+  else if (cat === "bild") {
+    cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page;
+    cur.text = "Wer bin ich?"; cur.revealed = 1; cur.chat = []; cur.solved = {};
+    cur.deadline = Date.now() + BLUR_STAGES * HINT_MS; cur.total = (BLUR_STAGES * HINT_MS) / 1000;
+    const round = room.round;
+    room.hintTimer = setInterval(() => {
+      if (room.phase !== "question" || room.round !== round) return clearInterval(room.hintTimer);
+      if (cur.revealed < BLUR_STAGES) { cur.revealed++; broadcast(room); }
+      else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
+    }, HINT_MS);
+  }
   else if (cat === "song") {
     cur.text = "Welcher Song ist das?"; cur.preview = songPick.url; cur.art = songPick.art;
     cur.song = { t: songPick.t, a: songPick.a }; cur.chat = []; cur.solved = {};
@@ -240,7 +285,7 @@ async function nextRound(room) {
     cur.text = "Wahrheit oder Pflicht?";
     cur.stage = "choose"; // choose -> task
   }
-  if (room.timerSec > 0 && cat !== "wop" && cat !== "werbinich") {
+  if (room.timerSec > 0 && !["wop", "werbinich", "bild"].includes(cat)) {
     const sec = cat === "schaetz" ? room.timerSec + 10 : cat === "song" ? room.timerSec + 15 : room.timerSec;
     cur.deadline = Date.now() + sec * 1000;
     cur.total = sec;
@@ -307,8 +352,9 @@ function resolve(room) {
     wrong.forEach((id) => give(id, 1));
     res.drinkers = wrong.map((id) => ({ id, name: P[id].name, n: 1 }));
     res.lines.push(!ids.length ? "Keiner hat geantwortet." : right.length === ids.length ? "Alle richtig. Streber." : right.length ? `${right.length} von ${ids.length} wussten's.` : "Keiner wusste es. Alle trinken.");
-  } else if (cur.type === "werbinich") {
+  } else if (cur.type === "werbinich" || cur.type === "bild") {
     res.text = ""; res.answer = cur.person.name; res.chat = cur.chat;
+    if (cur.type === "bild") { res.image = cur.image; res.page = cur.page; }
     const connected = room.order.filter((id) => P[id].connected);
     connected.forEach((id) => {
       const sv = cur.solved[id];
@@ -316,7 +362,8 @@ function resolve(room) {
       if (n > 0) { give(id, n); res.drinkers.push({ id, name: P[id].name, n }); }
     });
     const solvers = connected.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
-    res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name} bei Tipp ${cur.solved[solvers[0]].hint}.` : "Keiner hat's erraten.");
+    const unit = cur.type === "bild" ? "Stufe" : "Tipp";
+    res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name} bei ${unit} ${cur.solved[solvers[0]].hint}.` : "Keiner hat's erraten.");
     res.solvers = solvers.map((id) => ({ name: P[id].name, hint: cur.solved[id].hint }));
     cur.timedOut = false;
   } else if (cur.type === "wop") {
@@ -407,7 +454,7 @@ wss.on("connection", (ws) => {
       return broadcast(room);
     }
 
-    if (m.t === "guess" && room.phase === "question" && ["werbinich", "song"].includes(room.current.type)) {
+    if (m.t === "guess" && room.phase === "question" && ["werbinich", "song", "bild"].includes(room.current.type)) {
       const cur = room.current, text = String(m.v || "").trim().slice(0, 60);
       if (!text || cur.solved[me]) return;
       const name = room.players[me].name, tg = guessTarget(cur);
@@ -447,7 +494,7 @@ wss.on("connection", (ws) => {
       return resolve(room);
     }
     if (m.t === "force" && isHost && room.phase === "question" && room.current.type !== "wop") {
-      if (["werbinich", "song"].includes(room.current.type) || Object.keys(room.current.answers).length) return resolve(room);
+      if (["werbinich", "song", "bild"].includes(room.current.type) || Object.keys(room.current.answers).length) return resolve(room);
       return nextRound(room);
     }
   });
@@ -461,7 +508,7 @@ wss.on("connection", (ws) => {
       const next = room.order.find((id) => room.players[id].connected);
       if (next) room.hostId = next;
     }
-    if (room.phase === "question" && !["wop", "werbinich", "song"].includes(room.current.type) && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
+    if (room.phase === "question" && !["wop", "werbinich", "song", "bild"].includes(room.current.type) && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
     else broadcast(room);
     // Leere Räume nach 10 Minuten aufräumen
     setTimeout(() => {
