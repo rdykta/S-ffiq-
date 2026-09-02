@@ -35,6 +35,10 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 - Wahrheit oder Pflicht: zufällige Person; kneifen kostet 3
 - Entweder oder: Minderheit trinkt 1 (Gleichstand: alle)
 - Trivia: 4 Antworten, wer falsch liegt trinkt 1
+- Wer bin ich?: 4 Tipps im 7-Sekunden-Takt (allgemein → eindeutig), Freitext.
+  Falsche Tipps landen im Chat für alle, richtige werden als "[Name] hat es erraten!" gemeldet.
+  Nach dem letzten Tipp bleiben 7 Sekunden. Erraten bei Tipp 1/2/3/4 = 0/1/2/3 Schlücke, nicht erraten = 3.
+  Nachname reicht, kleine Tippfehler werden toleriert.
 - Roundmaster kann auswerten, überspringen, Roundmaster übergeben oder
   Spieler rauswerfen. Verlässt der Roundmaster das Spiel, rückt der nächste nach.
 - Handy kurz zu? Seite neu laden, man landet wieder in der Runde.
@@ -43,7 +47,8 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 
 Alle Fragen stehen in `questions.js` – Zeilen ergänzen, Server neu starten.
 Schätzfragen: `{ q: "...", a: Zahl, unit: "km" }`.
-Trivia: `{ q: "...", o: ["A", "B", "C", "D"], c: 1 }` – `c` ist die Position der richtigen Antwort, gezählt ab 0.
+Trivia: `{ q: "...", o: ["A", "B", "C", "D"], c: 1 }`
+Wer bin ich: `{ name: "Angela Merkel", alt: ["Merkel"], hints: ["Tipp 1", "Tipp 2", "Tipp 3", "Tipp 4"] }` – `alt` sind zusätzlich akzeptierte Schreibweisen; Tipp-Takt in `server.js` bei `HINT_MS` – `c` ist die Position der richtigen Antwort, gezählt ab 0.
 Neue Kategorie: Array in `questions.js` anlegen und in `server.js` bei
 `CATS`, `nextRound` und `resolve` je einen Block ergänzen.
 

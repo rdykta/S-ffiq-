@@ -34,7 +34,30 @@ const CATS = {
   wop: "Wahrheit oder Pflicht",
   oder: "Entweder oder",
   trivia: "Trivia",
+  werbinich: "Wer bin ich?",
 };
+const HINT_MS = 7000;
+
+// Freitext-Vergleich: Akzente/Satzzeichen weg, Nachname reicht, kleine Tippfehler ok
+function norm(s) {
+  return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss")
+    .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+function lev(a, b) {
+  const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let k = 1; k <= n; k++) d[0][k] = k;
+  for (let i = 1; i <= m; i++) for (let k = 1; k <= n; k++)
+    d[i][k] = Math.min(d[i - 1][k] + 1, d[i][k - 1] + 1, d[i - 1][k - 1] + (a[i - 1] === b[k - 1] ? 0 : 1));
+  return d[m][n];
+}
+function matchesPerson(guess, person) {
+  const g = norm(guess); if (g.length < 3) return false;
+  const full = norm(person.name);
+  const cands = [full, ...person.alt.map(norm)];
+  const toks = full.split(" ");
+  if (toks.length > 1) { const last = toks[toks.length - 1]; if (last.length >= 4) cands.push(last); }
+  return cands.some((c) => c === g || (c.length >= 5 && lev(c, g) <= (c.length >= 8 ? 2 : 1)) || (toks.length > 1 && g.split(" ").length > 1 && lev(c, g) <= 2));
+}
 
 function createRoom() {
   const code = makeCode();
@@ -62,7 +85,8 @@ function publicState(room, forId) {
     const p = room.players[id];
     return { id, name: p.name, drinks: p.drinks, connected: p.connected, answered: room.current ? room.current.answers[id] !== undefined : false };
   });
-  const cur = room.current ? { ...room.current, answers: undefined, correct: undefined } : null;
+  let cur = room.current ? { ...room.current, answers: undefined, correct: undefined } : null;
+  if (cur && cur.type === "werbinich") cur = { ...cur, person: undefined, hints: cur.person.hints.slice(0, cur.revealed), hintCount: cur.person.hints.length, solvedBy: Object.keys(cur.solved || {}) };
   return {
     code: room.code,
     hostId: room.hostId,
@@ -100,7 +124,7 @@ function pick(room, cat) {
 
 // "Zufällig, aber nicht zufällig": gewichteter Kartenstapel, jede Kategorie kommt
 // im Verhältnis der Gewichte dran, nie zweimal hintereinander, Wahrheit/Pflicht selten.
-const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1 };
+const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2 };
 function nextCat(room) {
   const cats = room.categories;
   if (cats.length === 1) return cats[0];
@@ -123,7 +147,10 @@ function nextCat(room) {
   return c;
 }
 
-function clearTimer(room) { if (room.timer) { clearTimeout(room.timer); room.timer = null; } }
+function clearTimer(room) {
+  if (room.timer) { clearTimeout(room.timer); room.timer = null; }
+  if (room.hintTimer) { clearInterval(room.hintTimer); room.hintTimer = null; }
+}
 
 function nextRound(room) {
   clearTimer(room);
@@ -136,6 +163,17 @@ function nextRound(room) {
   if (cat === "nie") cur.text = pick(room, "nie");
   else if (cat === "wer") cur.text = pick(room, "wer");
   else if (cat === "schaetz") { const q = pick(room, "schaetz"); cur.text = q.q; cur.answer = q.a; cur.unit = q.unit; }
+  else if (cat === "werbinich") {
+    cur.person = pick(room, "werbinich"); cur.text = "Wer bin ich?"; cur.revealed = 1; cur.chat = []; cur.solved = {};
+    const n = cur.person.hints.length, sec = (n * HINT_MS) / 1000;
+    cur.deadline = Date.now() + n * HINT_MS; cur.total = sec; cur.started = Date.now();
+    const round = room.round;
+    room.hintTimer = setInterval(() => {
+      if (room.phase !== "question" || room.round !== round) return clearInterval(room.hintTimer);
+      if (cur.revealed < n) { cur.revealed++; broadcast(room); }
+      else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
+    }, HINT_MS);
+  }
   else if (cat === "trivia") { const q = pick(room, "trivia"); cur.text = q.q; cur.options = q.o; cur.correct = q.c; }
   else if (cat === "oder") { const o = pick(room, "oder"); cur.text = "Entweder oder?"; cur.options = o; }
   else if (cat === "wop") {
@@ -143,7 +181,7 @@ function nextRound(room) {
     cur.text = "Wahrheit oder Pflicht?";
     cur.stage = "choose"; // choose -> task
   }
-  if (room.timerSec > 0 && cat !== "wop") {
+  if (room.timerSec > 0 && cat !== "wop" && cat !== "werbinich") {
     const sec = cat === "schaetz" ? room.timerSec + 10 : room.timerSec;
     cur.deadline = Date.now() + sec * 1000;
     cur.total = sec;
@@ -202,6 +240,18 @@ function resolve(room) {
     wrong.forEach((id) => give(id, 1));
     res.drinkers = wrong.map((id) => ({ id, name: P[id].name, n: 1 }));
     res.lines.push(!ids.length ? "Keiner hat geantwortet." : right.length === ids.length ? "Alle richtig. Streber." : right.length ? `${right.length} von ${ids.length} wussten's.` : "Keiner wusste es. Alle trinken.");
+  } else if (cur.type === "werbinich") {
+    res.text = ""; res.answer = cur.person.name; res.chat = cur.chat;
+    const connected = room.order.filter((id) => P[id].connected);
+    connected.forEach((id) => {
+      const sv = cur.solved[id];
+      const n = sv ? sv.hint - 1 : 3;
+      if (n > 0) { give(id, n); res.drinkers.push({ id, name: P[id].name, n }); }
+    });
+    const solvers = connected.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
+    res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name} bei Tipp ${cur.solved[solvers[0]].hint}.` : "Keiner hat's erraten.");
+    res.solvers = solvers.map((id) => ({ name: P[id].name, hint: cur.solved[id].hint }));
+    cur.timedOut = false;
   } else if (cur.type === "wop") {
     res.text = cur.task || cur.text;
     if (cur.refused) { give(cur.target, 3); res.drinkers.push({ id: cur.target, name: P[cur.target].name, n: 3 }); res.lines.push(`${P[cur.target].name} hat gekniffen.`); }
@@ -290,6 +340,17 @@ wss.on("connection", (ws) => {
       return broadcast(room);
     }
 
+    if (m.t === "guess" && room.phase === "question" && room.current.type === "werbinich") {
+      const cur = room.current, text = String(m.v || "").trim().slice(0, 60);
+      if (!text || cur.solved[me]) return;
+      const name = room.players[me].name;
+      if (matchesPerson(text, cur.person)) {
+        cur.solved[me] = { hint: cur.revealed, t: Date.now() };
+        cur.chat.push({ sys: true, text: `${name} hat es erraten!` });
+      } else cur.chat.push({ name, text });
+      if (cur.chat.length > 60) cur.chat.shift();
+      return broadcast(room);
+    }
     if (m.t === "answer" && room.phase === "question") {
       const cur = room.current;
       if (cur.type === "wop") {
@@ -316,7 +377,7 @@ wss.on("connection", (ws) => {
       return resolve(room);
     }
     if (m.t === "force" && isHost && room.phase === "question" && room.current.type !== "wop") {
-      if (Object.keys(room.current.answers).length) return resolve(room);
+      if (room.current.type === "werbinich" || Object.keys(room.current.answers).length) return resolve(room);
       return nextRound(room);
     }
   });
@@ -330,7 +391,7 @@ wss.on("connection", (ws) => {
       const next = room.order.find((id) => room.players[id].connected);
       if (next) room.hostId = next;
     }
-    if (room.phase === "question" && room.current.type !== "wop" && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
+    if (room.phase === "question" && !["wop", "werbinich"].includes(room.current.type) && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
     else broadcast(room);
     // Leere Räume nach 10 Minuten aufräumen
     setTimeout(() => {
