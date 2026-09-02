@@ -89,6 +89,8 @@
   .player .prog i{display:block;height:100%;width:0;background:var(--pink)}
   .pic{position:relative;border-radius:18px;overflow:hidden;background:var(--bg2);aspect-ratio:4/5;max-height:46vh}
   .pic img{width:100%;height:100%;object-fit:cover;transform:scale(1.08);transition:filter 1.2s ease}
+  .pic.fit{aspect-ratio:4/3;background:#FFF7E6}
+  .pic.fit img{object-fit:contain;transform:none;padding:6px}
   .pic .stage{position:absolute;right:10px;bottom:10px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px}
   .credit{font-size:12px;color:var(--mute);text-align:center}
   .hints{display:flex;flex-direction:column;gap:8px}
@@ -304,7 +306,7 @@ function renderQuestion(){
   } else if(c.type==="bild"){
     const solved=(c.solvedBy||[]).includes(S.you);
     body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div></div>
-      <div class="pic"><img id="pic" src="${esc(c.image)}" alt="" style="filter:blur(${blurPx(c)}px)"><span class="stage" id="stage">Stufe ${c.revealed}/${c.stages}</span></div>
+      <div class="pic ${c.fic?"fit":""}"><img id="pic" src="${esc(c.image)}" alt="" style="filter:blur(${blurPx(c)}px)"><span class="stage" id="stage">Stufe ${c.revealed}/${c.stages}</span></div>
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
       :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Wer bin ich?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
@@ -422,7 +424,7 @@ function renderResults(){
       <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
   }
   if(r.type==="werbinich"||r.type==="song"||r.type==="bild"){
-    extra = `<div class="card stack">${r.image?`<div class="pic" style="max-height:38vh"><img src="${esc(r.image)}" alt="" style="transform:none"></div><p class="credit">Bild: ${r.lang==="en"?"englischer":"deutscher"} Wikipedia-Artikel „${esc(r.page||r.answer)}“${r.lang==="en"?"":" (Wikimedia Commons)"}</p>`:""}<div class="center"><p>${r.type==="song"?"Das war":"Ich war"}</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div>${r.artist?`<p style="margin-top:4px">${esc(r.artist)}</p>`:""}</div>
+    extra = `<div class="card stack">${r.image?`<div class="pic ${r.fic?"fit":""}" style="max-height:38vh"><img src="${esc(r.image)}" alt="" style="transform:none"></div><p class="credit">Bild: ${r.lang==="en"?"englischer":"deutscher"} Wikipedia-Artikel „${esc(r.page||r.answer)}“${r.lang==="en"?"":" (Wikimedia Commons)"}</p>`:""}<div class="center"><p>${r.type==="song"?"Das war":"Ich war"}</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div>${r.artist?`<p style="margin-top:4px">${esc(r.artist)}</p>`:""}</div>
       ${r.solvers.length?r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>${sv.hint?`bei ${r.type==="bild"?"Stufe":"Tipp"} ${sv.hint}`:"✓ erkannt"}</span></div>`).join(""):""}
       <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
   }

@@ -310,6 +310,7 @@ async function nextRound(room) {
   }
   else if (cat === "bild") {
     cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page; cur.lang = bildPick.lang;
+    cur.fic = !!bildPick.person.en; // Figur: Bild komplett einpassen statt beschneiden
     cur.text = "Wer bin ich?"; cur.revealed = 1; cur.chat = []; cur.solved = {};
     cur.deadline = Date.now() + BLUR_STAGES * HINT_MS; cur.total = (BLUR_STAGES * HINT_MS) / 1000;
     const round = room.round;
@@ -417,7 +418,7 @@ function resolve(room) {
     res.lines.push(!ids.length ? "Keiner hat geantwortet." : right.length === ids.length ? "Alle richtig. Streber." : right.length ? `${right.length} von ${ids.length} wussten's.` : "Keiner wusste es. Alle trinken.");
   } else if (cur.type === "werbinich" || cur.type === "bild") {
     res.text = ""; res.answer = cur.person.name; res.chat = cur.chat;
-    if (cur.type === "bild") { res.image = cur.image; res.page = cur.page; res.lang = cur.lang; }
+    if (cur.type === "bild") { res.image = cur.image; res.page = cur.page; res.lang = cur.lang; res.fic = cur.fic; }
     const connected = room.order.filter((id) => P[id].connected);
     connected.forEach((id) => {
       const sv = cur.solved[id];
