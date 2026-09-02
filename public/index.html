@@ -459,7 +459,7 @@ function renderEnd(){
 }
 
 let wbiKey=null;
-function blurPx(c){ const steps=[28,18,11,5,0]; return steps[Math.min(c.revealed,steps.length)-1]; }
+function blurPx(c){ const steps=[25,16,10,4.5,0]; return steps[Math.min(c.revealed,steps.length)-1]; }
 function chatHtml(chat){ return chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg ${m.name===me().name?"mine":""}"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join(""); }
 function patchWbi(){
   const c=S.current, hb=document.getElementById("hints"), ch=document.getElementById("chat");
