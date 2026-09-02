@@ -16,6 +16,17 @@ const server = http.createServer((req, res) => {
 });
 const wss = new WebSocketServer({ server });
 
+// Heartbeat: tote Verbindungen (Handy im Standby, Proxy hat die Leitung gekappt) erkennen und wegräumen,
+// damit der Spieler sauber als "getrennt" gilt und sein nächster Rejoin nicht mit einer Leiche kollidiert.
+const HEARTBEAT_MS = Number(process.env.SUEFFIQ_HEARTBEAT_MS) || 30000;
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch (e) { /* egal */ }
+  }
+}, HEARTBEAT_MS).unref();
+
 // ---------- Hilfen ----------
 const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = (a) => a.map((v) => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map((x) => x[1]);
@@ -473,8 +484,11 @@ wss.on("connection", (ws) => {
   let room = null, me = null;
   const send = (o) => ws.readyState === 1 && ws.send(JSON.stringify(o));
   const err = (m) => send({ t: "error", m });
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
 
   ws.on("message", (raw) => {
+    ws.isAlive = true;
     let m; try { m = JSON.parse(raw); } catch { return; }
 
     if (m.t === "create") {
@@ -501,12 +515,15 @@ wss.on("connection", (ws) => {
       const r = rooms.get(m.code);
       if (!r || !r.players[m.id]) return send({ t: "reset" });
       room = r; me = m.id;
+      const old = room.players[me].ws;
       room.players[me].ws = ws; room.players[me].connected = true;
+      // Alte Verbindung desselben Spielers (vor Reload/Standby) aktiv schließen – ihr close-Event ist dann harmlos
+      if (old && old !== ws) { try { old.close(); } catch (e) { /* egal */ } }
       send({ t: "joined", code: room.code, id: me });
       return broadcast(room);
     }
 
-    if (m.t === "ping") return;
+    if (m.t === "ping") return send({ t: "pong" });
     if (!room || !me) return;
     const isHost = me === room.hostId;
 
@@ -617,6 +634,8 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     if (!room || !me || !room.players[me]) return;
+    // Veraltete Verbindung: Der Spieler hängt längst an einer neueren – nichts anfassen
+    if (room.players[me].ws !== ws) return;
     room.players[me].connected = false;
     room.players[me].ws = null;
     // Host weg? Nächsten verbundenen Spieler zum Roundmaster machen.

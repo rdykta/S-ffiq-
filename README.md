@@ -72,7 +72,8 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   Spieler rauswerfen. Verlässt der Roundmaster das Spiel, rückt der nächste nach.
 - Jeder Knopfdruck während einer Runde (Antworten, Raten, Zeichenwerkzeuge, Auswerten, Nächste Runde) gibt ein kurzes,
   helles Plopp als Bestätigung. Kommt aus dem Browser selbst (Web Audio), keine Audiodatei nötig; Handy auf lautlos = kein Ton.
-- Handy kurz zu? Seite neu laden, man landet wieder in der Runde.
+- Handy kurz zu oder Standby? Die App verbindet sich von selbst neu und holt den aktuellen Stand, sobald sie wieder
+  offen ist (Ping alle 20 s, bei ausbleibender Antwort wird die Verbindung ersetzt). Zur Not: Seite neu laden, man landet wieder in der Runde.
 
 ## Eigene Fragen
 
