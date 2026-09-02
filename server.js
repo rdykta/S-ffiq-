@@ -44,6 +44,9 @@ function createRoom() {
     players: {},
     order: [],
     categories: Object.keys(CATS),
+    timerSec: 30,
+    deck: [],
+    lastCat: null,
     phase: "lobby",
     round: 0,
     current: null,
@@ -67,6 +70,8 @@ function publicState(room, forId) {
     players,
     categories: room.categories,
     cats: CATS,
+    timerSec: room.timerSec,
+    now: Date.now(),
     phase: room.phase,
     round: room.round,
     current: cur,
@@ -93,10 +98,38 @@ function pick(room, cat) {
   return pool[i];
 }
 
+// "Zufällig, aber nicht zufällig": gewichteter Kartenstapel, jede Kategorie kommt
+// im Verhältnis der Gewichte dran, nie zweimal hintereinander, Wahrheit/Pflicht selten.
+const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1 };
+function nextCat(room) {
+  const cats = room.categories;
+  if (cats.length === 1) return cats[0];
+  if (!room.deck.length) {
+    let d = [];
+    cats.forEach((c) => { for (let i = 0; i < (WEIGHTS[c] || 2); i++) d.push(c); });
+    // Mischen, dann direkte Wiederholungen entzerren
+    d = shuffle(d);
+    for (let i = 1; i < d.length; i++) {
+      if (d[i] === d[i - 1]) {
+        const j = d.findIndex((x, k) => k > i && x !== d[i - 1] && (k + 1 >= d.length || d[k + 1] !== d[i]));
+        if (j > 0) [d[i], d[j]] = [d[j], d[i]];
+      }
+    }
+    room.deck = d;
+  }
+  let c = room.deck.shift();
+  if (c === room.lastCat && room.deck.length) { room.deck.push(c); c = room.deck.shift(); }
+  room.lastCat = c;
+  return c;
+}
+
+function clearTimer(room) { if (room.timer) { clearTimeout(room.timer); room.timer = null; } }
+
 function nextRound(room) {
+  clearTimer(room);
   room.round += 1;
   room.phase = "question";
-  const cat = rand(room.categories);
+  const cat = nextCat(room);
   const connected = room.order.filter((id) => room.players[id].connected);
   let cur = { type: cat, label: CATS[cat], answers: {} };
 
@@ -109,6 +142,15 @@ function nextRound(room) {
     cur.target = rand(connected.length ? connected : room.order);
     cur.text = "Wahrheit oder Pflicht?";
     cur.stage = "choose"; // choose -> task
+  }
+  if (room.timerSec > 0 && cat !== "wop") {
+    const sec = cat === "schaetz" ? room.timerSec + 10 : room.timerSec;
+    cur.deadline = Date.now() + sec * 1000;
+    cur.total = sec;
+    const round = room.round;
+    room.timer = setTimeout(() => {
+      if (room.phase === "question" && room.round === round) { room.current.timedOut = true; resolve(room); }
+    }, sec * 1000 + 300);
   }
   room.current = cur;
   broadcast(room);
@@ -147,7 +189,8 @@ function resolve(room) {
     const a = ids.filter((id) => A[id] === 0), b = ids.filter((id) => A[id] === 1);
     res.votes = [{ name: cur.options[0], n: a.length }, { name: cur.options[1], n: b.length }];
     let losers = [];
-    if (a.length === b.length) { res.lines.push("Unentschieden – alle trinken 1."); losers = ids; }
+    if (!ids.length) res.lines.push("Keiner hat gewählt.");
+    else if (a.length === b.length) { res.lines.push("Unentschieden – alle trinken 1."); losers = ids; }
     else { losers = a.length < b.length ? a : b; res.lines.push(`Mehrheit für ${a.length > b.length ? cur.options[0] : cur.options[1]}. Die Minderheit trinkt.`); }
     losers.forEach((id) => give(id, 1));
     res.drinkers = losers.map((id) => ({ id, name: P[id].name, n: 1 }));
@@ -158,12 +201,18 @@ function resolve(room) {
     res.votes = cur.options.map((o, i) => ({ name: o, n: ids.filter((id) => A[id] === i).length }));
     wrong.forEach((id) => give(id, 1));
     res.drinkers = wrong.map((id) => ({ id, name: P[id].name, n: 1 }));
-    res.lines.push(right.length === ids.length ? "Alle richtig. Streber." : right.length ? `${right.length} von ${ids.length} wussten's.` : "Keiner wusste es. Alle trinken.");
+    res.lines.push(!ids.length ? "Keiner hat geantwortet." : right.length === ids.length ? "Alle richtig. Streber." : right.length ? `${right.length} von ${ids.length} wussten's.` : "Keiner wusste es. Alle trinken.");
   } else if (cur.type === "wop") {
     res.text = cur.task || cur.text;
     if (cur.refused) { give(cur.target, 3); res.drinkers.push({ id: cur.target, name: P[cur.target].name, n: 3 }); res.lines.push(`${P[cur.target].name} hat gekniffen.`); }
     else res.lines.push(`${P[cur.target].name} hat's durchgezogen. Respekt.`);
   }
+  if (cur.timedOut) {
+    const late = room.order.filter((id) => P[id].connected && A[id] === undefined);
+    late.forEach((id) => { give(id, 1); res.drinkers.push({ id, name: P[id].name, n: 1 }); });
+    if (late.length) res.lines.push(`Zeit abgelaufen – ${late.map((id) => P[id].name).join(", ")} ${late.length === 1 ? "war" : "waren"} zu langsam.`);
+  }
+  clearTimer(room);
   room.lastResult = res;
   room.phase = "results";
   room.history.push(res);
@@ -219,16 +268,21 @@ wss.on("connection", (ws) => {
 
     if (m.t === "categories" && isHost) {
       const c = (m.cats || []).filter((k) => CATS[k]);
-      if (c.length) room.categories = c;
+      if (c.length) { room.categories = c; room.deck = []; }
+      return broadcast(room);
+    }
+    if (m.t === "timer" && isHost) {
+      const v = Number(m.sec);
+      if ([0, 15, 30, 45, 60].includes(v)) room.timerSec = v;
       return broadcast(room);
     }
     if (m.t === "start" && isHost) {
-      if (room.order.filter((id) => room.players[id].connected).length < 2) return err("Mindestens 2 Spieler nötig.");
+      if (room.order.filter((id) => room.players[id].connected).length < 1) return err("Niemand da.");
       return nextRound(room);
     }
     if (m.t === "next" && isHost && room.phase === "results") return nextRound(room);
     if (m.t === "skip" && isHost && room.phase === "question") return nextRound(room);
-    if (m.t === "end" && isHost) { room.phase = "end"; return broadcast(room); }
+    if (m.t === "end" && isHost) { clearTimer(room); room.phase = "end"; return broadcast(room); }
     if (m.t === "host" && isHost && room.players[m.id]) { room.hostId = m.id; return broadcast(room); }
     if (m.t === "kick" && isHost && room.players[m.id] && m.id !== me) {
       const p = room.players[m.id]; if (p.ws) { p.ws.send(JSON.stringify({ t: "reset" })); p.ws.close(); }

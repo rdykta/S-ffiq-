@@ -1,4 +1,4 @@
-# Prost – das Trinkspiel für alle Handys
+# SüffIQ – das Trinkspiel für alle Handys
 
 Lokaler Ersatz für TipsyIQ: eine Person erstellt eine Runde, die anderen
 tippen den 4-stelligen Code ein. Kein Account, keine Werbung, keine Cloud.
@@ -24,7 +24,10 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 
 ## Spielablauf
 
-- Roundmaster wählt Kategorien und startet
+- Roundmaster wählt Kategorien und Antwortzeit (15–60 s oder ohne Limit) und startet
+- Solo-Start ist möglich (zum Testen) – der Button heißt dann "Solo starten"
+- Kategorien wechseln gewichtet ab (Wahrheit/Pflicht selten, nie zweimal dieselbe hintereinander); Gewichte in `server.js` bei `WEIGHTS`
+- Timer-Balken läuft von grün über gelb nach rot; wer nicht rechtzeitig antwortet, trinkt 1
 - Jede Runde: eine zufällige Frage, alle antworten auf ihrem Handy
 - Ich hab noch nie: wer's getan hat, trinkt 1
 - Wer würde eher: meistgewählte Person trinkt 2
