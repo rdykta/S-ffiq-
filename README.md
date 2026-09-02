@@ -47,6 +47,12 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
   Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`).
+- Montagsmaler: ein zufälliger Spieler (nie zweimal hintereinander derselbe) bekommt ein Wort und zeichnet es
+  auf seinem Handy (Farben, Strichstärken, Radierer, alles löschen). Die anderen sehen die Zeichnung live und raten
+  per Freitext mit Chat und "Nah dran" wie bei "Wer bin ich"; angezeigt wird nur die Buchstabenzahl. 90 Sekunden
+  Zeichenzeit (`DRAW_SEC` in `server.js`), die Runde endet früher, sobald alle es erraten haben. Nicht erraten =
+  2 Schlücke, errät es niemand, trinkt der Zeichner 3. Wortliste in `questions.js` unter `malen`
+  (`{ name: "Fahrrad", alt: ["Rad"] }`).
 - Roundmaster kann auswerten, überspringen, Roundmaster übergeben oder
   Spieler rauswerfen. Verlässt der Roundmaster das Spiel, rückt der nächste nach.
 - Handy kurz zu? Seite neu laden, man landet wieder in der Runde.
