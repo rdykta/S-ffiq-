@@ -324,12 +324,12 @@ function renderQuestion(){
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
       :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Wer bin ich?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${c.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg ${m.name===me().name?"mine":""}"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div>`;
-  } else if(c.type==="bild"){
-    const solved=(c.solvedBy||[]).includes(S.you);
-    body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div></div>
+  } else if(c.type==="bild"||c.type==="logo"){
+    const solved=(c.solvedBy||[]).includes(S.you), logo=c.type==="logo";
+    body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div>${logo?`<h2 style="font-size:24px">Welche Marke ist das?</h2>`:""}</div>
       <div class="pic ${c.fic?"fit":""}"><img id="pic" src="${esc(c.image)}" alt="" style="filter:blur(${blurPx(c)}px)"><span class="stage" id="stage">Stufe ${c.revealed}/${c.stages}</span></div>
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
-      :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Wer bin ich?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
+      :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="${logo?"Welche Marke?":"Wer bin ich?"}" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
   } else if(c.type==="malen"){
     const solved=(c.solvedBy||[]).includes(S.you), drawer=c.drawer===S.you;
@@ -367,7 +367,7 @@ function renderQuestion(){
   $.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{ if(pending)return; pending=true; const v=b.dataset.a; send({t:"answer",v:/^\d$/.test(v)?Number(v):v}); });
   const g=document.getElementById("g"), gs=document.getElementById("gs");
   if(c.type==="malen") setupBoard(c.drawer===S.you);
-  if(gs && (c.type==="werbinich"||c.type==="song"||c.type==="bild"||c.type==="malen")){
+  if(gs && (c.type==="werbinich"||c.type==="song"||c.type==="bild"||c.type==="malen"||c.type==="logo")){
     g.oninput=()=>guessVal=g.value; if(document.activeElement!==g && !("ontouchstart" in window)) g.focus();
     const go=()=>{ const v=g.value.trim(); if(v.length<2){toast("Bisschen mehr, bitte.");return;} send({t:"guess",v}); guessVal=""; g.value=""; };
     gs.onclick=go; g.addEventListener("keydown",e=>{ if(e.key==="Enter"){ pop(); go(); } });
@@ -444,9 +444,10 @@ function renderResults(){
       ${r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>✓ nach ${sv.sec} s</span></div>`).join("")}
       <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
   }
-  if(r.type==="werbinich"||r.type==="song"||r.type==="bild"){
-    extra = `<div class="card stack">${r.image?`<div class="pic ${r.fic?"fit":""}" style="max-height:38vh"><img src="${esc(r.image)}" alt="" style="transform:none"></div><p class="credit">Bild: ${r.lang==="en"?"englischer":"deutscher"} Wikipedia-Artikel „${esc(r.page||r.answer)}“${r.lang==="en"?"":" (Wikimedia Commons)"}</p>`:""}<div class="center"><p>${r.type==="song"?"Das war":"Ich war"}</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div>${r.artist?`<p style="margin-top:4px">${esc(r.artist)}</p>`:""}</div>
-      ${r.solvers.length?r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>${sv.hint?`bei ${r.type==="bild"?"Stufe":"Tipp"} ${sv.hint}`:"✓ erkannt"}</span></div>`).join(""):""}
+  if(r.type==="werbinich"||r.type==="song"||r.type==="bild"||r.type==="logo"){
+    const credit = r.type==="logo" ? `Logo: Wikimedia Commons, Datei „${esc(r.page||r.answer)}“` : `Bild: ${r.lang==="en"?"englischer":"deutscher"} Wikipedia-Artikel „${esc(r.page||r.answer)}“${r.lang==="en"?"":" (Wikimedia Commons)"}`;
+    extra = `<div class="card stack">${r.image?`<div class="pic ${r.fic?"fit":""}" style="max-height:38vh"><img src="${esc(r.image)}" alt="" style="transform:none"></div><p class="credit">${credit}</p>`:""}<div class="center"><p>${r.type==="song"||r.type==="logo"?"Das war":"Ich war"}</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div>${r.artist?`<p style="margin-top:4px">${esc(r.artist)}</p>`:""}</div>
+      ${r.solvers.length?r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>${sv.hint?`bei ${r.type==="bild"||r.type==="logo"?"Stufe":"Tipp"} ${sv.hint}`:"✓ erkannt"}</span></div>`).join(""):""}
       <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
   }
   if(r.votes){
@@ -565,7 +566,7 @@ function render(){
   if(S.phase==="lobby") return renderLobby();
   if(S.phase==="question"){
     const key=S.code+":"+S.round;
-    const chatty = ["werbinich","song","bild","malen"].includes(S.current.type);
+    const chatty = ["werbinich","song","bild","malen","logo"].includes(S.current.type);
     if(chatty && wbiKey===key && patchWbi()) return;
     wbiKey = chatty ? key : null;
     renderQuestion(); startTimer(); return;
