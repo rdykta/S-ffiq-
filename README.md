@@ -52,6 +52,12 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
   Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`).
+- Regeln & Events: kein Raten, nur ein Screen. Eine neue Regel erscheint ("Nur noch mit links trinken", "Vor dem Trinken
+  auf den Tisch klopfen", "[Name] sucht sich einen Trink-Buddy" …) und gilt ab sofort. Irgendwann in den nächsten 10 bis
+  30 Runden kommt ein eigener Screen "Regel aufgehoben". Nie mehr als zwei Regeln gleichzeitig; ist das Limit erreicht,
+  kommt stattdessen die nächste Kategorie dran. Aktive Regeln stehen in jeder Runde oben auf dem Bildschirm. Der Roundmaster
+  klickt "Weiter". Regeln in `questions.js` unter `regel` (`{ t: "Text mit {X} und {Y}", g: "gruppe" }`; `{X}`/`{Y}` werden
+  zu Mitspielernamen, Regeln derselben Gruppe `g` sind nie gleichzeitig aktiv). Grenzen in `server.js` bei `RULE_MIN`, `RULE_MAX`, `RULE_MAX_ACTIVE`.
 - Montagsmaler: ein zufälliger Spieler (nie zweimal hintereinander derselbe) bekommt ein Wort und zeichnet es
   auf seinem Handy (Farben, Strichstärken, Radierer, alles löschen). Die anderen sehen die Zeichnung live und raten
   per Freitext mit Chat und "Nah dran" wie bei "Wer bin ich"; angezeigt wird nur die Buchstabenzahl. Fester Timer von
