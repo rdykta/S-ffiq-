@@ -321,11 +321,11 @@ function renderQuestion(){
   if(gs && (c.type==="werbinich"||c.type==="song"||c.type==="bild"||c.type==="malen")){
     g.oninput=()=>guessVal=g.value; if(document.activeElement!==g && !("ontouchstart" in window)) g.focus();
     const go=()=>{ const v=g.value.trim(); if(v.length<2){toast("Bisschen mehr, bitte.");return;} send({t:"guess",v}); guessVal=""; g.value=""; };
-    gs.onclick=go; g.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
+    gs.onclick=go; g.addEventListener("keydown",e=>{ if(e.key==="Enter"){ pop(); go(); } });
     const ch=document.getElementById("chat"); if(ch) ch.scrollTop=ch.scrollHeight;
   } else if(gs){ g.oninput=()=>guessVal=g.value; g.focus();
     const go=()=>{ if(g.value===""){toast("Zahl eingeben.");return;} send({t:"answer",v:Number(g.value)}); guessVal=""; };
-    gs.onclick=go; g.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); }); }
+    gs.onclick=go; g.addEventListener("keydown",e=>{ if(e.key==="Enter"){ pop(); go(); } }); }
   const d=document.getElementById("done"); if(d) d.onclick=()=>send({t:"wopDone",refused:false});
   const r=document.getElementById("ref"); if(r) r.onclick=()=>send({t:"wopDone",refused:true});
   bindPlayer();
@@ -334,6 +334,21 @@ function renderQuestion(){
 
   function wait(){ const n=S.players.filter(p=>p.connected&&!p.answered).length; return `<p class="wait">Abgegeben. Noch ${n} ${n===1?"Antwort":"Antworten"} offen…</p>`; }
 }
+
+// ---------- Klick-Feedback: sanftes, helles Plopp bei jedem Knopfdruck in einer Runde ----------
+let ac=null;
+function pop(){
+  try{
+    if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==="suspended") ac.resume();
+    const t=ac.currentTime, o=ac.createOscillator(), g=ac.createGain(), f=ac.createBiquadFilter();
+    o.type="sine"; o.frequency.setValueAtTime(880,t); o.frequency.exponentialRampToValueAtTime(440,t+0.09);
+    f.type="lowpass"; f.frequency.value=2400;
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.22,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+0.13);
+    o.connect(f).connect(g).connect(ac.destination); o.start(t); o.stop(t+0.14);
+  }catch{}
+}
+document.addEventListener("click",e=>{ if(S && (S.phase==="question"||S.phase==="results") && e.target.closest("button")) pop(); },true);
 
 let audio=null, audioKey=null;
 function stopAudio(){ if(audio){ audio.pause(); audio=null; } }
