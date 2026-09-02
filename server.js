@@ -38,7 +38,9 @@ const CATS = {
   song: "Song-Quiz",
   bild: "Wer bin ich? (Bild)",
   malen: "Montagsmaler",
+  regel: "Regeln & Events",
 };
+const RULE_MIN = 10, RULE_MAX = 30, RULE_MAX_ACTIVE = 2; // Regel gilt 10–30 Runden, höchstens 2 gleichzeitig
 const BLUR_STAGES = 5;
 const HINT_MS = 7000;
 const DRAW_SEC = 60;            // Zeichenzeit pro Runde (fest, unabhängig von der Antwortzeit)
@@ -108,6 +110,7 @@ function createRoom() {
     deck: [],
     lastCat: null,
     lastDrawer: null,
+    rules: [],       // aktive Regeln: { text, g, endRound }
     phase: "lobby",
     round: 0,
     current: null,
@@ -137,6 +140,7 @@ function publicState(room, forId) {
     cats: CATS,
     timerSec: room.timerSec,
     nsfw: room.nsfw,
+    rules: room.rules.map((r) => ({ text: r.text })),
     now: Date.now(),
     phase: room.phase,
     round: room.round,
@@ -236,11 +240,35 @@ function clearTimer(room) {
   if (room.hintTimer) { clearInterval(room.hintTimer); room.hintTimer = null; }
 }
 
+// Neue Regel ziehen: keine aus einer Gruppe, die schon aktiv ist; {Y}-Regeln nur ab 2 Spielern; nichts doppelt
+function drawRule(room, players) {
+  const P = room.players, pool = Q.regel;
+  const activeG = new Set(room.rules.map((r) => r.g).filter(Boolean));
+  const ok = (r) => !(r.g && activeG.has(r.g)) && !(players.length < 2 && /\{Y\}/.test(r.t));
+  room.used.regel = room.used.regel || [];
+  let free = pool.map((_, i) => i).filter((i) => !room.used.regel.includes(i) && ok(pool[i]));
+  if (!free.length) { room.used.regel = []; free = pool.map((_, i) => i).filter((i) => ok(pool[i])); }
+  if (!free.length) return null;
+  const i = rand(free); room.used.regel.push(i);
+  const x = rand(players), y = rand(players.filter((id) => id !== x)) || x;
+  const text = pool[i].t.replace(/\{X\}/g, P[x].name).replace(/\{Y\}/g, P[y].name);
+  return { text, g: pool[i].g, endRound: room.round + RULE_MIN + Math.floor(Math.random() * (RULE_MAX - RULE_MIN + 1)) };
+}
+
 async function nextRound(room) {
   clearTimer(room);
   room.round += 1;
   room.phase = "question";
+  // Fällige Regeln zuerst: eigener Screen "Regel aufgehoben", die normale Kategorie kommt danach dran
+  const due = room.rules.filter((r) => room.round >= r.endRound);
+  if (due.length) {
+    room.rules = room.rules.filter((r) => !due.includes(r));
+    room.current = { type: "regel", label: CATS.regel, mode: "end", ended: due.map((r) => r.text), text: "Regel aufgehoben", answers: {} };
+    return broadcast(room);
+  }
   let cat = nextCat(room);
+  // Schon zwei Regeln aktiv? Dann kommt stattdessen die nächste Kategorie aus dem Stapel
+  if (cat === "regel" && room.rules.length >= RULE_MAX_ACTIVE && room.categories.length > 1) { cat = nextCat(room); }
   let songPick = null;
   if (cat === "song") {
     for (let i = 0; i < 4 && !songPick; i++) {
@@ -287,6 +315,11 @@ async function nextRound(room) {
       else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
     }, HINT_MS);
   }
+  else if (cat === "regel") {
+    const rule = room.rules.length < RULE_MAX_ACTIVE ? drawRule(room, connected.length ? connected : room.order) : null;
+    if (rule) { room.rules.push(rule); cur.mode = "new"; cur.rule = rule.text; cur.text = "Neue Regel!"; }
+    else { cur.mode = "full"; cur.text = "Regeln voll"; }
+  }
   else if (cat === "malen") {
     // Zeichner: zufällig unter den Verbundenen, aber nicht derselbe wie beim letzten Mal
     const pool = connected.length ? connected : room.order;
@@ -311,7 +344,7 @@ async function nextRound(room) {
     cur.text = "Wahrheit oder Pflicht?";
     cur.stage = "choose"; // choose -> task
   }
-  if (room.timerSec > 0 && !["wop", "werbinich", "bild", "malen"].includes(cat)) {
+  if (room.timerSec > 0 && !["wop", "werbinich", "bild", "malen", "regel"].includes(cat)) {
     const sec = cat === "schaetz" ? room.timerSec + 10 : cat === "song" ? room.timerSec + 15 : room.timerSec;
     cur.deadline = Date.now() + sec * 1000;
     cur.total = sec;
@@ -571,6 +604,7 @@ wss.on("connection", (ws) => {
       return resolve(room);
     }
     if (m.t === "force" && isHost && room.phase === "question" && room.current.type !== "wop") {
+      if (room.current.type === "regel") return nextRound(room);
       if (CHATTY.includes(room.current.type) || Object.keys(room.current.answers).length) return resolve(room);
       return nextRound(room);
     }
