@@ -219,9 +219,11 @@ function renderLobby(){
         <div class="cats">${Object.entries(S.cats).map(([k,v])=>`<button class="cat ${S.categories.includes(k)?"on":""}" data-cat="${k}">${v}</button>`).join("")}</div>
         <p>Antwortzeit:</p>
         <div class="opts">${[0,15,30,45,60].map(v=>`<button class="${S.timerSec===v?"on":""}" data-timer="${v}">${v===0?"Kein Limit":v+" s"}</button>`).join("")}</div>
+        <p>18+ Fragen (versaut, nur für Erwachsene):</p>
+        <div class="opts"><button class="${S.nsfw?"on":""}" data-nsfw="1">🔞 An</button><button class="${S.nsfw?"":"on"}" data-nsfw="0">Jugendfrei</button></div>
         <button id="start">${S.players.filter(p=>p.connected).length<2?"Solo starten (zum Testen)":"Spiel starten"}</button>
       </div>`
-    :`<p class="wait">Warten, bis der Roundmaster startet…</p>`}`;
+    :`<p class="wait">Warten, bis der Roundmaster startet…${S.nsfw?" 🔞 18+-Fragen sind an.":""}</p>`}`;
   bindManage();
   const link = `${location.origin}${location.pathname}?code=${S.code}`;
   const copy = async()=>{ try{ await navigator.clipboard.writeText(link); toast("Link kopiert."); }catch{ prompt("Link kopieren:", link); } };
@@ -237,6 +239,7 @@ function renderLobby(){
     send({t:"categories",cats:c});
   });
   $.querySelectorAll("[data-timer]").forEach(b=>b.onclick=()=>send({t:"timer",sec:Number(b.dataset.timer)}));
+  $.querySelectorAll("[data-nsfw]").forEach(b=>b.onclick=()=>send({t:"nsfw",on:b.dataset.nsfw==="1"}));
   const st=document.getElementById("start"); if(st) st.onclick=()=>send({t:"start"});
 }
 

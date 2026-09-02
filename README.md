@@ -24,7 +24,10 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 
 ## Spielablauf
 
-- Roundmaster wählt Kategorien und Antwortzeit (15–60 s oder ohne Limit) und startet
+- Roundmaster wählt Kategorien, Antwortzeit (15–60 s oder ohne Limit) und ob 18+-Fragen dabei sind, und startet
+- 18+ Fragen: standardmäßig an. Dann werden in allen Text-Kategorien (Ich hab noch nie, Wer würde eher, Entweder oder,
+  Wahrheit oder Pflicht, Trivia, Schätzfrage, Montagsmaler) zusätzlich versaute Fragen gemischt. "Jugendfrei" schaltet
+  sie ab. Pflicht-Aufgaben mit Körperkontakt gelten nur mit Einverständnis der anderen Person; kneifen kostet wie immer 3.
 - Solo-Start ist möglich (zum Testen) – der Button heißt dann "Solo starten"
 - Kategorien kommen gleichmäßig, aber in zufälliger Reihenfolge dran: jede gewählte Kategorie genau einmal pro
   Durchlauf, dann wird neu gemischt (nie zweimal dieselbe hintereinander)
@@ -66,6 +69,8 @@ Schätzfragen: `{ q: "...", a: Zahl, unit: "km" }`.
 Trivia: `{ q: "...", o: ["A", "B", "C", "D"], c: 1 }`
 Wer bin ich: `{ name: "Angela Merkel", alt: ["Merkel"], hints: ["Tipp 1", "Tipp 2", "Tipp 3", "Tipp 4"] }` – `alt` sind zusätzlich akzeptierte Schreibweisen; Tipp-Takt in `server.js` bei `HINT_MS` – `c` ist die Position der richtigen Antwort, gezählt ab 0.
 Wer bin ich (Bild): `{ name: "Taylor Swift", alt: ["Swift"] }` unter `bild` – das Bild kommt automatisch aus der Wikipedia.
+18+-Fragen stehen gesammelt unter `nsfw`, mit denselben Unterlisten und Formaten wie die normalen Kategorien
+(`nsfw.nie`, `nsfw.wer`, `nsfw.oder`, `nsfw.wahrheit`, `nsfw.pflicht`, `nsfw.trivia`, `nsfw.schaetz`, `nsfw.malen`).
 Neue Kategorie: Array in `questions.js` anlegen und in `server.js` bei
 `CATS`, `nextRound` und `resolve` je einen Block ergänzen.
 
