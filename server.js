@@ -37,9 +37,13 @@ const CATS = {
   werbinich: "Wer bin ich?",
   song: "Song-Quiz",
   bild: "Wer bin ich? (Bild)",
+  malen: "Montagsmaler",
 };
 const BLUR_STAGES = 5;
 const HINT_MS = 7000;
+const DRAW_SEC = 90;            // Zeichenzeit pro Runde
+const DRAW_COLORS = ["#1b0f2b", "#e63946", "#1d6fe0", "#2a9d3f", "#f5b82e", "#8b5a2b", "#ff4f8b", "#fff7e6"]; // letzter = Radierer (Papierfarbe)
+const DRAW_MAX_STROKES = 600, DRAW_MAX_POINTS = 40000;
 
 // Freitext-Vergleich: Akzente/Satzzeichen weg, Nachname reicht, kleine Tippfehler ok
 function norm(s) {
@@ -85,8 +89,11 @@ function nearTarget(guess, target, isPerson) {
   });
 }
 function guessTarget(cur) {
-  return cur.type === "werbinich" || cur.type === "bild" ? { t: cur.person, person: true } : { t: { name: cur.song.t, alt: [] }, person: false };
+  if (cur.type === "werbinich" || cur.type === "bild") return { t: cur.person, person: true };
+  if (cur.type === "malen") return { t: cur.word, person: false };
+  return { t: { name: cur.song.t, alt: [] }, person: false };
 }
+const CHATTY = ["werbinich", "song", "bild", "malen"];
 
 function createRoom() {
   const code = makeCode();
@@ -99,6 +106,7 @@ function createRoom() {
     timerSec: 30,
     deck: [],
     lastCat: null,
+    lastDrawer: null,
     phase: "lobby",
     round: 0,
     current: null,
@@ -118,6 +126,7 @@ function publicState(room, forId) {
   if (cur && cur.type === "werbinich") cur = { ...cur, person: undefined, hints: cur.person.hints.slice(0, cur.revealed), hintCount: cur.person.hints.length, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "song") cur = { ...cur, song: undefined, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "bild") cur = { ...cur, person: undefined, page: undefined, stages: BLUR_STAGES, solvedBy: Object.keys(cur.solved || {}) };
+  if (cur && cur.type === "malen") cur = { ...cur, word: forId === cur.drawer ? cur.word.name : undefined, wordLen: cur.word.name.length, strokes: undefined, colors: DRAW_COLORS, solvedBy: Object.keys(cur.solved || {}) };
   return {
     code: room.code,
     hostId: room.hostId,
@@ -132,6 +141,15 @@ function publicState(room, forId) {
     current: cur,
     result: room.phase === "results" ? room.lastResult : null,
   };
+}
+
+// Nachricht an alle (außer optional einem) – für Zeichenstriche, die nicht den ganzen State brauchen
+function relay(room, msg, exceptId) {
+  const raw = JSON.stringify(msg);
+  for (const id of room.order) {
+    const p = room.players[id];
+    if (id !== exceptId && p.ws && p.ws.readyState === 1) p.ws.send(raw);
+  }
 }
 
 function broadcast(room) {
@@ -155,7 +173,7 @@ function pick(room, cat) {
 
 // "Zufällig, aber nicht zufällig": gewichteter Kartenstapel, jede Kategorie kommt
 // im Verhältnis der Gewichte dran, nie zweimal hintereinander, Wahrheit/Pflicht selten.
-const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2, song: 2, bild: 2 };
+const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2, song: 2, bild: 2, malen: 2 };
 
 // Personenbild aus der deutschen Wikipedia (Artikelbild, i. d. R. Wikimedia Commons, frei lizenziert)
 const imageCache = new Map();
@@ -274,6 +292,19 @@ async function nextRound(room) {
       else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
     }, HINT_MS);
   }
+  else if (cat === "malen") {
+    // Zeichner: zufällig unter den Verbundenen, aber nicht derselbe wie beim letzten Mal
+    const pool = connected.length ? connected : room.order;
+    const cand = pool.filter((id) => id !== room.lastDrawer);
+    cur.drawer = rand(cand.length ? cand : pool); room.lastDrawer = cur.drawer;
+    cur.word = pick(room, "malen"); cur.text = "Was wird gezeichnet?";
+    cur.chat = []; cur.solved = {}; cur.strokes = []; cur.points = 0;
+    cur.deadline = Date.now() + DRAW_SEC * 1000; cur.total = DRAW_SEC; cur.started = Date.now();
+    const round = room.round;
+    room.timer = setTimeout(() => {
+      if (room.phase === "question" && room.round === round) resolve(room);
+    }, DRAW_SEC * 1000 + 300);
+  }
   else if (cat === "song") {
     cur.text = "Welcher Song ist das?"; cur.preview = songPick.url; cur.art = songPick.art;
     cur.song = { t: songPick.t, a: songPick.a }; cur.chat = []; cur.solved = {};
@@ -285,7 +316,7 @@ async function nextRound(room) {
     cur.text = "Wahrheit oder Pflicht?";
     cur.stage = "choose"; // choose -> task
   }
-  if (room.timerSec > 0 && !["wop", "werbinich", "bild"].includes(cat)) {
+  if (room.timerSec > 0 && !["wop", "werbinich", "bild", "malen"].includes(cat)) {
     const sec = cat === "schaetz" ? room.timerSec + 10 : cat === "song" ? room.timerSec + 15 : room.timerSec;
     cur.deadline = Date.now() + sec * 1000;
     cur.total = sec;
@@ -366,6 +397,21 @@ function resolve(room) {
     res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name} bei ${unit} ${cur.solved[solvers[0]].hint}.` : "Keiner hat's erraten.");
     res.solvers = solvers.map((id) => ({ name: P[id].name, hint: cur.solved[id].hint }));
     cur.timedOut = false;
+  } else if (cur.type === "malen") {
+    res.text = ""; res.answer = cur.word.name; res.chat = cur.chat; res.drawer = P[cur.drawer] ? P[cur.drawer].name : "?";
+    const guessers = room.order.filter((id) => P[id].connected && id !== cur.drawer);
+    const solvers = guessers.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
+    res.solvers = solvers.map((id) => ({ name: P[id].name, sec: cur.solved[id].sec }));
+    if (cur.aborted) res.lines.push("Der Zeichner ist abgehauen – keiner trinkt.");
+    else {
+      guessers.forEach((id) => { if (!cur.solved[id]) { give(id, 2); res.drinkers.push({ id, name: P[id].name, n: 2 }); } });
+      if (guessers.length && !solvers.length && P[cur.drawer]) {
+        give(cur.drawer, 3); res.drinkers.push({ id: cur.drawer, name: P[cur.drawer].name, n: 3 });
+        res.lines.push(`Keiner hat's erkannt – ${res.drawer} zeichnet wie ein Fuß und trinkt 3.`);
+      } else if (solvers.length) res.lines.push(`Am schnellsten: ${P[solvers[0]].name} nach ${cur.solved[solvers[0]].sec} s.`);
+      else res.lines.push("Keine Rater da – Übungsrunde.");
+    }
+    cur.timedOut = false;
   } else if (cur.type === "wop") {
     res.text = cur.task || cur.text;
     if (cur.refused) { give(cur.target, 3); res.drinkers.push({ id: cur.target, name: P[cur.target].name, n: 3 }); res.lines.push(`${P[cur.target].name} hat gekniffen.`); }
@@ -377,6 +423,7 @@ function resolve(room) {
     if (late.length) res.lines.push(`Zeit abgelaufen – ${late.map((id) => P[id].name).join(", ")} ${late.length === 1 ? "war" : "waren"} zu langsam.`);
   }
   clearTimer(room);
+  if (cur.type === "malen") room.lastStrokes = cur.strokes;
   room.lastResult = res;
   room.phase = "results";
   room.history.push(res);
@@ -454,19 +501,53 @@ wss.on("connection", (ws) => {
       return broadcast(room);
     }
 
-    if (m.t === "guess" && room.phase === "question" && ["werbinich", "song", "bild"].includes(room.current.type)) {
+    if (m.t === "guess" && room.phase === "question" && CHATTY.includes(room.current.type)) {
       const cur = room.current, text = String(m.v || "").trim().slice(0, 60);
       if (!text || cur.solved[me]) return;
+      if (cur.type === "malen" && me === cur.drawer) return; // der Zeichner rät nicht mit
       const name = room.players[me].name, tg = guessTarget(cur);
       if (matchesTarget(text, tg.t, tg.person)) {
-        cur.solved[me] = { hint: cur.revealed || 0, t: Date.now() };
+        cur.solved[me] = { hint: cur.revealed || 0, t: Date.now(), sec: Math.round((Date.now() - (cur.started || Date.now())) / 1000) };
         cur.chat.push({ sys: true, text: `${name} hat es erraten!` });
       } else {
         cur.chat.push({ name, text });
         if (nearTarget(text, tg.t, tg.person)) send({ t: "near" });
       }
       if (cur.chat.length > 60) cur.chat.shift();
+      if (cur.type === "malen") {
+        // Alle Rater durch? Dann sofort auswerten.
+        const guessers = room.order.filter((id) => room.players[id].connected && id !== cur.drawer);
+        if (guessers.length && guessers.every((id) => cur.solved[id])) return resolve(room);
+      }
       return broadcast(room);
+    }
+
+    // Montagsmaler: Striche des Zeichners entgegennehmen und an die anderen weiterreichen
+    if (m.t === "stroke" && room.phase === "question" && room.current.type === "malen" && room.current.drawer === me) {
+      const cur = room.current;
+      const id = String(m.id || "").slice(0, 16);
+      const pts = Array.isArray(m.p) ? m.p.slice(0, 400).map(Number) : [];
+      if (!id || !pts.length || pts.length % 2 || pts.some((v) => !Number.isFinite(v) || v < -0.05 || v > 1.05)) return;
+      let st = cur.strokes.length && cur.strokes[cur.strokes.length - 1].id === id ? cur.strokes[cur.strokes.length - 1] : null;
+      if (!st) {
+        if (cur.strokes.length >= DRAW_MAX_STROKES) return;
+        const c = DRAW_COLORS.includes(m.c) ? m.c : DRAW_COLORS[0];
+        const w = Math.min(40, Math.max(1, Number(m.w) || 6));
+        st = { id, c, w, p: [] }; cur.strokes.push(st);
+      }
+      if (cur.points + pts.length / 2 > DRAW_MAX_POINTS) return;
+      st.p.push(...pts); cur.points += pts.length / 2;
+      return relay(room, { t: "draw", round: room.round, s: { id, c: st.c, w: st.w, p: pts } }, me);
+    }
+    if (m.t === "clear" && room.phase === "question" && room.current.type === "malen" && room.current.drawer === me) {
+      room.current.strokes = []; room.current.points = 0;
+      return relay(room, { t: "draw", round: room.round, clear: true }, me);
+    }
+    if (m.t === "drawSync") {
+      const cur = room.current;
+      if (room.phase === "question" && cur && cur.type === "malen") return send({ t: "draw", round: room.round, full: true, strokes: cur.strokes });
+      if (room.phase === "results" && room.lastResult && room.lastResult.type === "malen") return send({ t: "draw", round: room.round, full: true, strokes: room.lastStrokes || [] });
+      return;
     }
     if (m.t === "answer" && room.phase === "question") {
       const cur = room.current;
@@ -494,7 +575,7 @@ wss.on("connection", (ws) => {
       return resolve(room);
     }
     if (m.t === "force" && isHost && room.phase === "question" && room.current.type !== "wop") {
-      if (["werbinich", "song", "bild"].includes(room.current.type) || Object.keys(room.current.answers).length) return resolve(room);
+      if (CHATTY.includes(room.current.type) || Object.keys(room.current.answers).length) return resolve(room);
       return nextRound(room);
     }
   });
@@ -508,7 +589,8 @@ wss.on("connection", (ws) => {
       const next = room.order.find((id) => room.players[id].connected);
       if (next) room.hostId = next;
     }
-    if (room.phase === "question" && !["wop", "werbinich", "song", "bild"].includes(room.current.type) && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
+    if (room.phase === "question" && room.current.type === "malen" && room.current.drawer === me) { room.current.aborted = true; resolve(room); }
+    else if (room.phase === "question" && !["wop", ...CHATTY].includes(room.current.type) && Object.keys(room.current.answers).length && allAnswered(room)) resolve(room);
     else broadcast(room);
     // Leere Räume nach 10 Minuten aufräumen
     setTimeout(() => {

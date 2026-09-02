@@ -104,6 +104,19 @@
   .msg.mine .who{color:var(--pink)}
   .chat:empty::before{content:"Noch keine Tipps. Wer traut sich?";color:var(--mute);font-size:14px;text-align:center}
   @media (prefers-reduced-motion:reduce){.hint.new{animation:none}}
+  .board{position:relative;border-radius:18px;overflow:hidden;background:#FFF7E6;aspect-ratio:4/3;box-shadow:0 0 0 2px var(--line)}
+  .board canvas{display:block;width:100%;height:100%;touch-action:none}
+  .board.draw canvas{cursor:crosshair}
+  .board .who{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;pointer-events:none}
+  .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .tools .sw{width:34px;height:34px;border-radius:50%;border:3px solid var(--bg);padding:0;flex:0 0 auto;box-shadow:0 0 0 2px var(--mute)}
+  .tools .sw.on{box-shadow:0 0 0 3px var(--ink);transform:scale(1.12)}
+  .tools .sw.eraser{background:#FFF7E6 !important;color:#8b5a2b;font-size:16px;font-weight:900}
+  .tools .sz{width:auto;flex:0 0 auto;padding:6px 12px;font-size:14px;border-radius:10px;background:transparent;border:2px solid var(--line);color:var(--mute)}
+  .tools .sz.on{border-color:var(--pink);color:var(--pink)}
+  .tools .clr{width:auto;flex:1;padding:8px 12px;font-size:14px;border-radius:10px;background:transparent;border:2px solid var(--line);color:var(--ink)}
+  .word{text-align:center;padding:6px 0 2px}
+  .word b{display:block;font-size:clamp(26px,8vw,38px);letter-spacing:-.02em;color:var(--gold);line-height:1.1}
   .brand i{font-style:normal;color:var(--gold)}
   .center{text-align:center}
   .end .pl{padding:14px 16px}
@@ -139,6 +152,7 @@ function connect(){
     if(m.t==="error"){ toast(m.m); pending=false; }
     if(m.t==="near"){ const n=document.getElementById("near"); if(n){ n.innerHTML='<span style="color:var(--gold);font-weight:800">🔥 Nah dran!</span>'; setTimeout(()=>{ if(n.isConnected) n.innerHTML=""; },4000);} if(navigator.vibrate) navigator.vibrate(60); }
     if(m.t==="reset"){ sessionStorage.removeItem("code"); sessionStorage.removeItem("id"); S=null; renderStart(); }
+    if(m.t==="draw"){ onDraw(m); }
   };
   ws.onclose = ()=>{ clearInterval(ws.ping); setTimeout(connect,1200); };
   ws.ping = setInterval(()=>send({t:"ping"}), 25000);
@@ -265,6 +279,19 @@ function renderQuestion(){
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
       :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Wer bin ich?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
+  } else if(c.type==="malen"){
+    const solved=(c.solvedBy||[]).includes(S.you), drawer=c.drawer===S.you;
+    const colors=c.colors||[];
+    body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div>${drawer
+        ?`<div class="word"><p>Du zeichnest:</p><b>${esc(c.word||"")}</b></div>`
+        :`<h2 style="font-size:24px">${esc(nameOf(c.drawer))} zeichnet – was ist das?</h2><p class="center" style="font-size:14px;margin-top:6px">${c.wordLen} Buchstaben</p>`}</div>
+      <div class="board ${drawer?"draw":""}"><canvas id="board"></canvas>${drawer?"":`<span class="who">✏️ ${esc(nameOf(c.drawer))}</span>`}</div>
+      ${drawer?`<div class="tools" id="tools">${colors.map((col,i)=>`<button class="sw ${i===colors.length-1?"eraser":""} ${col===drawTool.c?"on":""}" data-col="${col}" style="background:${col}" aria-label="${i===colors.length-1?"Radierer":"Farbe"}">${i===colors.length-1?"✕":""}</button>`).join("")}
+          <button class="sz ${drawTool.w===4?"on":""}" data-w="4">dünn</button><button class="sz ${drawTool.w===8?"on":""}" data-w="8">mittel</button><button class="sz ${drawTool.w===16?"on":""}" data-w="16">dick</button>
+          <button class="clr" id="clear">Alles löschen</button></div>`
+      :solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
+      :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Was wird gezeichnet?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
+      <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
   } else if(c.type==="song"){
     const solved=(c.solvedBy||[]).includes(S.you);
     body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div><h2 style="font-size:24px">Welcher Song ist das?</h2></div>
@@ -281,13 +308,14 @@ function renderQuestion(){
   }
 
   const timerHtml = c.deadline ? `<div class="timer" id="timer"><div class="fill" id="tfill"></div></div><div class="timer-lab" id="tlab"></div>` : "";
-  if(c.type==="werbinich") S.players.forEach(p=>p.answered=(c.solvedBy||[]).includes(p.id));
+  if(c.type==="werbinich"||c.type==="malen") S.players.forEach(p=>p.answered=(c.solvedBy||[]).includes(p.id));
   $.innerHTML = `${header()}${timerHtml}${body}${playerList({answered:true})}
     ${isHost()?`<div class="row hostbar">${c.type!=="wop"?`<button class="alt small" id="force">Auswerten</button>`:""}<button class="alt small" id="skip">Frage überspringen</button></div>`:""}`;
 
   $.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{ if(pending)return; pending=true; const v=b.dataset.a; send({t:"answer",v:/^\d$/.test(v)?Number(v):v}); });
   const g=document.getElementById("g"), gs=document.getElementById("gs");
-  if(gs && (c.type==="werbinich"||c.type==="song"||c.type==="bild")){
+  if(c.type==="malen") setupBoard(c.drawer===S.you);
+  if(gs && (c.type==="werbinich"||c.type==="song"||c.type==="bild"||c.type==="malen")){
     g.oninput=()=>guessVal=g.value; if(document.activeElement!==g && !("ontouchstart" in window)) g.focus();
     const go=()=>{ const v=g.value.trim(); if(v.length<2){toast("Bisschen mehr, bitte.");return;} send({t:"guess",v}); guessVal=""; g.value=""; };
     gs.onclick=go; g.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
@@ -343,6 +371,12 @@ function renderResults(){
     extra = `<div class="card stack"><div class="center"><p>Richtige Antwort</p><div class="big">${r.answer}${r.unit?` <span style="font-size:.4em;color:var(--mute)">${esc(r.unit)}</span>`:""}</div></div>
       ${r.guesses.map(g=>`<div class="bar"><span class="t">${esc(g.name)}</span><span>${g.guess}</span></div>`).join("")}</div>`;
   }
+  if(r.type==="malen"){
+    extra = `<div class="card stack"><div class="board"><canvas id="board"></canvas><span class="who">✏️ ${esc(r.drawer)}</span></div>
+      <div class="center"><p>Das sollte sein</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div></div>
+      ${r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>✓ nach ${sv.sec} s</span></div>`).join("")}
+      <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
+  }
   if(r.type==="werbinich"||r.type==="song"||r.type==="bild"){
     extra = `<div class="card stack">${r.image?`<div class="pic" style="max-height:38vh"><img src="${esc(r.image)}" alt="" style="transform:none"></div><p class="credit">Bild: Wikipedia-Artikel „${esc(r.page||r.answer)}“ (Wikimedia Commons)</p>`:""}<div class="center"><p>${r.type==="song"?"Das war":"Ich war"}</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div>${r.artist?`<p style="margin-top:4px">${esc(r.artist)}</p>`:""}</div>
       ${r.solvers.length?r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>${sv.hint?`bei ${r.type==="bild"?"Stufe":"Tipp"} ${sv.hint}`:"✓ erkannt"}</span></div>`).join(""):""}
@@ -363,6 +397,7 @@ function renderResults(){
     </div>
     ${playerList()}
     ${isHost()?`<div class="stack hostbar"><button id="next">Nächste Runde</button><button id="end" class="alt small">Spiel beenden</button></div>`:`<p class="wait">Der Roundmaster startet die nächste Runde.</p>`}`;
+  if(r.type==="malen") setupBoard(false);
   const n=document.getElementById("next"); if(n) n.onclick=()=>send({t:"next"});
   const e=document.getElementById("end"); if(e) e.onclick=()=>{ if(confirm("Spiel wirklich beenden?")) send({t:"end"}); };
 }
@@ -399,13 +434,71 @@ function patchWbi(){
   return true;
 }
 
+// ---------- Montagsmaler: Zeichenfläche ----------
+// Striche liegen normalisiert (0..1) vor, damit jedes Handy dieselbe Zeichnung sieht.
+let drawTool={c:"#1b0f2b", w:8};
+let draw={key:null, strokes:[], map:{}, canvas:null, ctx:null, cur:null, buf:[], flush:null};
+function drawKey(){ return S ? S.code+":"+S.round : null; }
+function drawReset(key){ draw.key=key; draw.strokes=[]; draw.map={}; draw.cur=null; draw.buf=[]; if(draw.ctx) drawAll(); }
+function drawScale(){ return draw.canvas ? draw.canvas.width/400 : 1; }
+function drawSeg(st, from){
+  const ctx=draw.ctx; if(!ctx) return;
+  const W=draw.canvas.width, H=draw.canvas.height, k=drawScale();
+  ctx.strokeStyle=st.c; ctx.fillStyle=st.c; ctx.lineWidth=st.w*k; ctx.lineCap="round"; ctx.lineJoin="round";
+  const p=st.p;
+  if(p.length<=2){ ctx.beginPath(); ctx.arc(p[0]*W,p[1]*H,st.w*k/2,0,Math.PI*2); ctx.fill(); return; }
+  const start=Math.max(0, from-2);
+  ctx.beginPath(); ctx.moveTo(p[start]*W,p[start+1]*H);
+  for(let i=start+2;i<p.length;i+=2) ctx.lineTo(p[i]*W,p[i+1]*H);
+  ctx.stroke();
+}
+function drawAll(){
+  const ctx=draw.ctx; if(!ctx) return;
+  ctx.fillStyle="#FFF7E6"; ctx.fillRect(0,0,draw.canvas.width,draw.canvas.height);
+  draw.strokes.forEach(st=>drawSeg(st,0));
+}
+function onDraw(m){
+  if(!S || m.round!==S.round) return;
+  const key=drawKey(); if(draw.key!==key) drawReset(key);
+  if(m.full){ draw.strokes=m.strokes||[]; draw.map={}; draw.strokes.forEach(st=>draw.map[st.id]=st); drawAll(); return; }
+  if(m.clear){ draw.strokes=[]; draw.map={}; drawAll(); return; }
+  if(!m.s) return;
+  let st=draw.map[m.s.id];
+  if(!st){ st={id:m.s.id,c:m.s.c,w:m.s.w,p:[]}; draw.map[st.id]=st; draw.strokes.push(st); }
+  const from=st.p.length; st.p.push(...m.s.p); drawSeg(st, from);
+}
+function setupBoard(canDraw){
+  const cv=document.getElementById("board"); if(!cv) return;
+  draw.canvas=cv; draw.ctx=cv.getContext("2d");
+  const fit=()=>{ const r=cv.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+    const w=Math.round(r.width*dpr), h=Math.round(r.height*dpr);
+    if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; } drawAll(); };
+  fit(); if(!draw.resize){ draw.resize=true; window.addEventListener("resize", ()=>{ if(draw.canvas&&draw.canvas.isConnected) fit(); }); }
+  const key=drawKey();
+  if(draw.key!==key){ drawReset(key); send({t:"drawSync"}); }
+  if(!canDraw) return;
+  const pos=e=>{ const r=cv.getBoundingClientRect(); return [Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)), Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))]; };
+  const flush=()=>{ draw.flush=null; if(draw.cur && draw.buf.length){ send({t:"stroke", id:draw.cur.id, c:draw.cur.c, w:draw.cur.w, p:draw.buf}); draw.buf=[]; } };
+  const add=(x,y)=>{ const st=draw.cur, from=st.p.length; st.p.push(x,y); draw.buf.push(x,y); drawSeg(st, from); if(!draw.flush) draw.flush=setTimeout(flush,40); };
+  cv.onpointerdown=e=>{ if(S.phase!=="question") return; e.preventDefault(); cv.setPointerCapture(e.pointerId);
+    const [x,y]=pos(e); draw.cur={id:Math.random().toString(36).slice(2,10), c:drawTool.c, w:drawTool.w, p:[]}; draw.map[draw.cur.id]=draw.cur; draw.strokes.push(draw.cur); add(x,y); };
+  cv.onpointermove=e=>{ if(!draw.cur) return; e.preventDefault(); const [x,y]=pos(e); const p=draw.cur.p, n=p.length;
+    if(n && Math.abs(p[n-2]-x)<0.002 && Math.abs(p[n-1]-y)<0.002) return; add(x,y); };
+  const up=e=>{ if(!draw.cur) return; if(draw.flush) clearTimeout(draw.flush); flush(); draw.cur=null; };
+  cv.onpointerup=up; cv.onpointercancel=up; cv.onpointerleave=up;
+  const tools=document.getElementById("tools"); if(!tools) return;
+  tools.querySelectorAll("[data-col]").forEach(b=>b.onclick=()=>{ drawTool.c=b.dataset.col; tools.querySelectorAll("[data-col]").forEach(x=>x.classList.toggle("on",x===b)); });
+  tools.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>{ drawTool.w=Number(b.dataset.w); tools.querySelectorAll("[data-w]").forEach(x=>x.classList.toggle("on",x===b)); });
+  document.getElementById("clear").onclick=()=>{ if(!draw.strokes.length||confirm("Zeichnung komplett löschen?")){ draw.strokes=[]; draw.map={}; drawAll(); send({t:"clear"}); } };
+}
+
 function render(){
   if(!S) return renderStart();
   if(S.phase!=="question") stopAudio();
   if(S.phase==="lobby") return renderLobby();
   if(S.phase==="question"){
     const key=S.code+":"+S.round;
-    const chatty = ["werbinich","song","bild"].includes(S.current.type);
+    const chatty = ["werbinich","song","bild","malen"].includes(S.current.type);
     if(chatty && wbiKey===key && patchWbi()) return;
     wbiKey = chatty ? key : null;
     renderQuestion(); startTimer(); return;
