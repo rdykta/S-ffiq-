@@ -104,6 +104,7 @@ function createRoom() {
     order: [],
     categories: Object.keys(CATS),
     timerSec: 30,
+    nsfw: true,   // 18+-Fragen mit dazumischen (Roundmaster kann's in der Lobby abschalten)
     deck: [],
     lastCat: null,
     lastDrawer: null,
@@ -135,6 +136,7 @@ function publicState(room, forId) {
     categories: room.categories,
     cats: CATS,
     timerSec: room.timerSec,
+    nsfw: room.nsfw,
     now: Date.now(),
     phase: room.phase,
     round: room.round,
@@ -161,9 +163,15 @@ function broadcast(room) {
   }
 }
 
+// Fragenpool: Basisfragen, bei 18+ zusätzlich die NSFW-Fragen der Kategorie hintendran.
+// Die Indizes der Basisfragen bleiben dabei stabil, deshalb überlebt "used" ein Umschalten.
+function poolFor(room, cat) {
+  const extra = room.nsfw && Q.nsfw && Q.nsfw[cat];
+  return extra && extra.length ? Q[cat].concat(extra) : Q[cat];
+}
 function pick(room, cat) {
-  const pool = Q[cat];
-  room.used[cat] = room.used[cat] || [];
+  const pool = poolFor(room, cat);
+  room.used[cat] = (room.used[cat] || []).filter((i) => i < pool.length);
   if (room.used[cat].length >= pool.length) room.used[cat] = [];
   const free = pool.map((_, i) => i).filter((i) => !room.used[cat].includes(i));
   const i = rand(free);
@@ -469,6 +477,7 @@ wss.on("connection", (ws) => {
       if (c.length) { room.categories = c; room.deck = []; }
       return broadcast(room);
     }
+    if (m.t === "nsfw" && isHost) { room.nsfw = !!m.on; return broadcast(room); }
     if (m.t === "timer" && isHost) {
       const v = Number(m.sec);
       if ([0, 15, 30, 45, 60].includes(v)) room.timerSec = v;
