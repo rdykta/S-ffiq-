@@ -184,26 +184,30 @@ function pick(room, cat) {
 }
 
 
-// Personenbild aus der deutschen Wikipedia (Artikelbild, i. d. R. Wikimedia Commons, frei lizenziert)
+// Artikelbild aus der Wikipedia. Personen: deutsche Wikipedia (i. d. R. Wikimedia Commons, frei lizenziert).
+// Figuren (Eintrag mit en): englische Wikipedia, weil die deutsche für Zeichentrickfiguren meist kein Bild hat;
+// dort dürfen auch nicht-freie Figurenbilder im Artikel stehen (pilicense=any). Danach Fallback auf die deutsche.
 const imageCache = new Map();
+async function wikiImage(lang, term, anyLicense) {
+  const params = { action: "query", generator: "search", gsrsearch: term, gsrlimit: "1", gsrnamespace: "0", prop: "pageimages", piprop: "thumbnail|name", pithumbsize: "640", format: "json" };
+  if (anyLicense) params.pilicense = "any";
+  const url = `https://${lang}.wikipedia.org/w/api.php?` + new URLSearchParams(params);
+  try {
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
+    const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "SueffIQ/1.0 (Partyspiel; Wikipedia-Artikelbilder)" } }); clearTimeout(to);
+    const d = await r.json();
+    const pg = Object.values((d.query || {}).pages || {})[0];
+    if (pg && pg.thumbnail && pg.thumbnail.source) return { url: pg.thumbnail.source, page: pg.title, lang };
+  } catch (e) { /* nächster Versuch */ }
+  return null;
+}
 async function findImage(person) {
-  if (process.env.SUEFFIQ_STUB_IMAGE) return { url: process.env.SUEFFIQ_STUB_IMAGE, page: person.name };
+  if (process.env.SUEFFIQ_STUB_IMAGE) return { url: process.env.SUEFFIQ_STUB_IMAGE, page: person.name, lang: person.en ? "en" : "de" };
   if (imageCache.has(person.name)) return imageCache.get(person.name);
-  const names = [person.name, ...person.alt];
-  for (const n of names.slice(0, 2)) {
-    const url = "https://de.wikipedia.org/w/api.php?" + new URLSearchParams({ action: "query", generator: "search", gsrsearch: n, gsrlimit: "1", gsrnamespace: "0", prop: "pageimages", piprop: "thumbnail|name", pithumbsize: "640", format: "json" });
-    try {
-      const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
-      const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "SueffIQ/1.0 (Partyspiel; Wikipedia-Artikelbilder)" } }); clearTimeout(to);
-      const d = await r.json();
-      const pg = Object.values((d.query || {}).pages || {})[0];
-      if (pg && pg.thumbnail && pg.thumbnail.source) {
-        const res = { url: pg.thumbnail.source, page: pg.title };
-        imageCache.set(person.name, res); return res;
-      }
-    } catch (e) { /* nächster Versuch */ }
-  }
-  imageCache.set(person.name, null); return null;
+  const tries = person.en ? [["en", person.en, true], ["de", person.name, false]] : [["de", person.name, false], ["de", person.alt[0], false]];
+  let res = null;
+  for (const [lang, term, any] of tries) { if (term) res = await wikiImage(lang, term, any); if (res) break; }
+  imageCache.set(person.name, res); return res;
 }
 
 // Song-Vorschau aus dem iTunes-Katalog (öffentliche Such-API, 30-Sekunden-Preview)
@@ -305,7 +309,7 @@ async function nextRound(room) {
     }, HINT_MS);
   }
   else if (cat === "bild") {
-    cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page;
+    cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page; cur.lang = bildPick.lang;
     cur.text = "Wer bin ich?"; cur.revealed = 1; cur.chat = []; cur.solved = {};
     cur.deadline = Date.now() + BLUR_STAGES * HINT_MS; cur.total = (BLUR_STAGES * HINT_MS) / 1000;
     const round = room.round;
@@ -413,7 +417,7 @@ function resolve(room) {
     res.lines.push(!ids.length ? "Keiner hat geantwortet." : right.length === ids.length ? "Alle richtig. Streber." : right.length ? `${right.length} von ${ids.length} wussten's.` : "Keiner wusste es. Alle trinken.");
   } else if (cur.type === "werbinich" || cur.type === "bild") {
     res.text = ""; res.answer = cur.person.name; res.chat = cur.chat;
-    if (cur.type === "bild") { res.image = cur.image; res.page = cur.page; }
+    if (cur.type === "bild") { res.image = cur.image; res.page = cur.page; res.lang = cur.lang; }
     const connected = room.order.filter((id) => P[id].connected);
     connected.forEach((id) => {
       const sv = cur.solved[id];
