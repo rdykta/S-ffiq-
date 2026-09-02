@@ -50,6 +50,7 @@ const CATS = {
   bild: "Wer bin ich? (Bild)",
   malen: "Montagsmaler",
   regel: "Regeln & Events",
+  logo: "Logo-Quiz",
 };
 const RULE_MIN = 10, RULE_MAX = 30, RULE_MAX_ACTIVE = 2; // Regel gilt 10–30 Runden, höchstens 2 gleichzeitig
 const BLUR_STAGES = 5;
@@ -104,9 +105,10 @@ function nearTarget(guess, target, isPerson) {
 function guessTarget(cur) {
   if (cur.type === "werbinich" || cur.type === "bild") return { t: cur.person, person: true };
   if (cur.type === "malen") return { t: cur.word, person: false };
+  if (cur.type === "logo") return { t: cur.brand, person: false };
   return { t: { name: cur.song.t, alt: [] }, person: false };
 }
-const CHATTY = ["werbinich", "song", "bild", "malen"];
+const CHATTY = ["werbinich", "song", "bild", "malen", "logo"];
 
 function createRoom() {
   const code = makeCode();
@@ -141,6 +143,7 @@ function publicState(room, forId) {
   if (cur && cur.type === "werbinich") cur = { ...cur, person: undefined, hints: cur.person.hints.slice(0, cur.revealed), hintCount: cur.person.hints.length, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "song") cur = { ...cur, song: undefined, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "bild") cur = { ...cur, person: undefined, page: undefined, stages: BLUR_STAGES, solvedBy: Object.keys(cur.solved || {}) };
+  if (cur && cur.type === "logo") cur = { ...cur, brand: undefined, page: undefined, stages: BLUR_STAGES, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "malen") cur = { ...cur, word: forId === cur.drawer ? cur.word.name : undefined, wordLen: cur.word.name.length, strokes: undefined, colors: DRAW_COLORS, solvedBy: Object.keys(cur.solved || {}) };
   return {
     code: room.code,
@@ -219,6 +222,25 @@ async function findImage(person) {
   let res = null;
   for (const [lang, term, any] of tries) { if (term) res = await wikiImage(lang, term, any); if (res) break; }
   imageCache.set(person.name, res); return res;
+}
+
+// Markenlogo von Wikimedia Commons: Datei prüfen und als 640px-Thumbnail (bei SVG als PNG) holen
+const logoCache = new Map();
+async function findLogo(brand) {
+  if (process.env.SUEFFIQ_STUB_IMAGE) return { url: process.env.SUEFFIQ_STUB_IMAGE, page: brand.file };
+  if (logoCache.has(brand.file)) return logoCache.get(brand.file);
+  const url = "https://commons.wikimedia.org/w/api.php?" + new URLSearchParams({ action: "query", titles: "File:" + brand.file, redirects: "1", prop: "imageinfo", iiprop: "url", iiurlwidth: "640", format: "json" });
+  let res = null;
+  try {
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
+    const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "SueffIQ/1.0 (Partyspiel; Markenlogos von Wikimedia Commons)" } }); clearTimeout(to);
+    const d = await r.json();
+    const pg = Object.values((d.query || {}).pages || {})[0];
+    const ii = pg && !("missing" in pg) && pg.imageinfo && pg.imageinfo[0];
+    if (ii && (ii.thumburl || ii.url)) res = { url: ii.thumburl || ii.url, page: pg.title.replace(/^File:/, "") };
+  } catch (e) { /* nächster Versuch */ }
+  logoCache.set(brand.file, res);
+  return res;
 }
 
 // Song-Vorschau aus dem iTunes-Katalog (öffentliche Such-API, 30-Sekunden-Preview)
@@ -302,6 +324,15 @@ async function nextRound(room) {
     }
     if (!bildPick) { cat = room.categories.find((c) => !["bild", "song"].includes(c)) || "trivia"; room.lastCat = cat; }
   }
+  let logoPick = null;
+  if (cat === "logo") {
+    for (let i = 0; i < 4 && !logoPick; i++) {
+      const br = pick(room, "logo");
+      const im = await findLogo(br);
+      if (im) logoPick = { brand: br, ...im };
+    }
+    if (!logoPick) { cat = room.categories.find((c) => !["logo", "bild", "song"].includes(c)) || "trivia"; room.lastCat = cat; }
+  }
   const connected = room.order.filter((id) => room.players[id].connected);
   let cur = { type: cat, label: CATS[cat], answers: {} };
 
@@ -319,10 +350,16 @@ async function nextRound(room) {
       else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
     }, HINT_MS);
   }
-  else if (cat === "bild") {
-    cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page; cur.lang = bildPick.lang;
-    cur.fic = !!bildPick.person.en; // Figur: Bild komplett einpassen statt beschneiden
-    cur.text = "Wer bin ich?"; cur.revealed = 1; cur.chat = []; cur.solved = {};
+  else if (cat === "bild" || cat === "logo") {
+    if (cat === "bild") {
+      cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page; cur.lang = bildPick.lang;
+      cur.fic = !!bildPick.person.en; // Figur: Bild komplett einpassen statt beschneiden
+      cur.text = "Wer bin ich?";
+    } else {
+      cur.brand = logoPick.brand; cur.image = logoPick.url; cur.page = logoPick.page; cur.fic = true;
+      cur.text = "Welche Marke ist das?";
+    }
+    cur.revealed = 1; cur.chat = []; cur.solved = {};
     cur.deadline = Date.now() + BLUR_STAGES * HINT_MS; cur.total = (BLUR_STAGES * HINT_MS) / 1000;
     const round = room.round;
     room.hintTimer = setInterval(() => {
@@ -360,7 +397,7 @@ async function nextRound(room) {
     cur.text = "Wahrheit oder Pflicht?";
     cur.stage = "choose"; // choose -> task
   }
-  if (room.timerSec > 0 && !["wop", "werbinich", "bild", "malen", "regel"].includes(cat)) {
+  if (room.timerSec > 0 && !["wop", "werbinich", "bild", "malen", "regel", "logo"].includes(cat)) {
     const sec = cat === "schaetz" ? room.timerSec + 10 : cat === "song" ? room.timerSec + 15 : room.timerSec;
     cur.deadline = Date.now() + sec * 1000;
     cur.total = sec;
@@ -427,17 +464,18 @@ function resolve(room) {
     wrong.forEach((id) => give(id, 1));
     res.drinkers = wrong.map((id) => ({ id, name: P[id].name, n: 1 }));
     res.lines.push(!ids.length ? "Keiner hat geantwortet." : right.length === ids.length ? "Alle richtig. Streber." : right.length ? `${right.length} von ${ids.length} wussten's.` : "Keiner wusste es. Alle trinken.");
-  } else if (cur.type === "werbinich" || cur.type === "bild") {
-    res.text = ""; res.answer = cur.person.name; res.chat = cur.chat;
+  } else if (cur.type === "werbinich" || cur.type === "bild" || cur.type === "logo") {
+    res.text = ""; res.answer = cur.type === "logo" ? cur.brand.name : cur.person.name; res.chat = cur.chat;
     if (cur.type === "bild") { res.image = cur.image; res.page = cur.page; res.lang = cur.lang; res.fic = cur.fic; }
+    if (cur.type === "logo") { res.image = cur.image; res.page = cur.page; res.fic = true; }
     const connected = room.order.filter((id) => P[id].connected);
     connected.forEach((id) => {
       const sv = cur.solved[id];
-      const n = sv ? 0 : 3;
+      const n = sv ? 0 : cur.type === "logo" ? 2 : 3;
       if (n > 0) { give(id, n); res.drinkers.push({ id, name: P[id].name, n }); }
     });
     const solvers = connected.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
-    const unit = cur.type === "bild" ? "Stufe" : "Tipp";
+    const unit = cur.type === "bild" || cur.type === "logo" ? "Stufe" : "Tipp";
     res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name} bei ${unit} ${cur.solved[solvers[0]].hint}.` : "Keiner hat's erraten.");
     res.solvers = solvers.map((id) => ({ name: P[id].name, hint: cur.solved[id].hint }));
     cur.timedOut = false;

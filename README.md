@@ -52,6 +52,11 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   Figuren haben in der deutschen Wikipedia meist kein Bild, deshalb kommt ihr Bild über den Suchbegriff `en` aus der
   englischen Wikipedia (dort auch nicht-freie Figurenbilder, Nachweis in der Auflösung). Der Nachname bzw. die Figur
   allein reicht beim Raten ("Simpson", "Homer").
+- Logo-Quiz: eine Bildmarke ohne Schriftzug (Apfel, Swoosh, Stern, Sirene …) startet verschwommen und wird wie bei
+  "Wer bin ich? (Bild)" in 5 Stufen alle 7 Sekunden schärfer. Raten per Freitext mit Chat und "Nah dran". Nicht erkannt =
+  2 Schlücke, erkannt = 0. Die Logos kommen von Wikimedia Commons; der Server prüft die Datei vor jeder Runde und
+  überspringt fehlende (bis zu 4 Versuche, sonst andere Kategorie). Liste in `questions.js` unter `logo`
+  (`{ name: "Nike", alt: ["Swoosh"], file: "Logo NIKE.svg" }` – `file` ist der Commons-Dateiname ohne "File:").
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
