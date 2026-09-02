@@ -26,7 +26,8 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 
 - Roundmaster wählt Kategorien und Antwortzeit (15–60 s oder ohne Limit) und startet
 - Solo-Start ist möglich (zum Testen) – der Button heißt dann "Solo starten"
-- Kategorien wechseln gewichtet ab (Wahrheit/Pflicht selten, nie zweimal dieselbe hintereinander); Gewichte in `server.js` bei `WEIGHTS`
+- Kategorien kommen gleichmäßig, aber in zufälliger Reihenfolge dran: jede gewählte Kategorie genau einmal pro
+  Durchlauf, dann wird neu gemischt (nie zweimal dieselbe hintereinander)
 - Timer-Balken läuft von grün über gelb nach rot; wer nicht rechtzeitig antwortet, trinkt 1
 - Jede Runde: eine zufällige Frage, alle antworten auf ihrem Handy
 - Ich hab noch nie: wer's getan hat, trinkt 1
@@ -42,15 +43,16 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   Schreibweise), bekommt privat ein "Nah dran!" – in beiden Freitext-Kategorien.
 - Wer bin ich? (Bild): Artikelbild der Person aus der deutschen Wikipedia (Wikimedia Commons, mit Bildnachweis
   in der Auflösung), startet stark verschwommen und wird in 5 Stufen alle 7 Sekunden schärfer. Raten, Chat,
-  "Nah dran" und Schlücke wie bei "Wer bin ich". Nutzt dieselbe Personenliste (`werbinich`).
+  "Nah dran" und Schlücke wie bei "Wer bin ich". Eigene Personenliste in `questions.js` unter `bild`: sehr bekannte,
+  überwiegend aktuelle Personen (`{ name: "Taylor Swift", alt: ["Swift"] }`), plus ein paar Weltberühmtheiten der Geschichte.
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
   Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`).
 - Montagsmaler: ein zufälliger Spieler (nie zweimal hintereinander derselbe) bekommt ein Wort und zeichnet es
   auf seinem Handy (Farben, Strichstärken, Radierer, alles löschen). Die anderen sehen die Zeichnung live und raten
-  per Freitext mit Chat und "Nah dran" wie bei "Wer bin ich"; angezeigt wird nur die Buchstabenzahl. 90 Sekunden
-  Zeichenzeit (`DRAW_SEC` in `server.js`), die Runde endet früher, sobald alle es erraten haben. Nicht erraten =
+  per Freitext mit Chat und "Nah dran" wie bei "Wer bin ich"; angezeigt wird nur die Buchstabenzahl. Fester Timer von
+  60 Sekunden unabhängig von der Antwortzeit (`DRAW_SEC` in `server.js`), die Runde endet früher, sobald alle es erraten haben. Nicht erraten =
   2 Schlücke, errät es niemand, trinkt der Zeichner 3. Wortliste in `questions.js` unter `malen`
   (`{ name: "Fahrrad", alt: ["Rad"] }`).
 - Roundmaster kann auswerten, überspringen, Roundmaster übergeben oder
@@ -63,6 +65,7 @@ Alle Fragen stehen in `questions.js` – Zeilen ergänzen, Server neu starten.
 Schätzfragen: `{ q: "...", a: Zahl, unit: "km" }`.
 Trivia: `{ q: "...", o: ["A", "B", "C", "D"], c: 1 }`
 Wer bin ich: `{ name: "Angela Merkel", alt: ["Merkel"], hints: ["Tipp 1", "Tipp 2", "Tipp 3", "Tipp 4"] }` – `alt` sind zusätzlich akzeptierte Schreibweisen; Tipp-Takt in `server.js` bei `HINT_MS` – `c` ist die Position der richtigen Antwort, gezählt ab 0.
+Wer bin ich (Bild): `{ name: "Taylor Swift", alt: ["Swift"] }` unter `bild` – das Bild kommt automatisch aus der Wikipedia.
 Neue Kategorie: Array in `questions.js` anlegen und in `server.js` bei
 `CATS`, `nextRound` und `resolve` je einen Block ergänzen.
 
