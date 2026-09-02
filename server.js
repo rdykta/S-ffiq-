@@ -41,7 +41,7 @@ const CATS = {
 };
 const BLUR_STAGES = 5;
 const HINT_MS = 7000;
-const DRAW_SEC = 90;            // Zeichenzeit pro Runde
+const DRAW_SEC = 60;            // Zeichenzeit pro Runde (fest, unabhängig von der Antwortzeit)
 const DRAW_COLORS = ["#1b0f2b", "#e63946", "#1d6fe0", "#2a9d3f", "#f5b82e", "#8b5a2b", "#ff4f8b", "#fff7e6"]; // letzter = Radierer (Papierfarbe)
 const DRAW_MAX_STROKES = 600, DRAW_MAX_POINTS = 40000;
 
@@ -171,9 +171,6 @@ function pick(room, cat) {
   return pool[i];
 }
 
-// "Zufällig, aber nicht zufällig": gewichteter Kartenstapel, jede Kategorie kommt
-// im Verhältnis der Gewichte dran, nie zweimal hintereinander, Wahrheit/Pflicht selten.
-const WEIGHTS = { nie: 3, wer: 3, trivia: 3, oder: 2, schaetz: 2, wop: 1, werbinich: 2, song: 2, bild: 2, malen: 2 };
 
 // Personenbild aus der deutschen Wikipedia (Artikelbild, i. d. R. Wikimedia Commons, frei lizenziert)
 const imageCache = new Map();
@@ -214,22 +211,12 @@ async function findPreview(song) {
     return res;
   } catch (e) { return null; }
 }
+// "Zufällig, aber gleichmäßig": Kartenstapel mit jeder gewählten Kategorie genau einmal,
+// gemischt. Ist der Stapel leer, wird neu gemischt – nie dieselbe Kategorie zweimal hintereinander.
 function nextCat(room) {
   const cats = room.categories;
   if (cats.length === 1) return cats[0];
-  if (!room.deck.length) {
-    let d = [];
-    cats.forEach((c) => { for (let i = 0; i < (WEIGHTS[c] || 2); i++) d.push(c); });
-    // Mischen, dann direkte Wiederholungen entzerren
-    d = shuffle(d);
-    for (let i = 1; i < d.length; i++) {
-      if (d[i] === d[i - 1]) {
-        const j = d.findIndex((x, k) => k > i && x !== d[i - 1] && (k + 1 >= d.length || d[k + 1] !== d[i]));
-        if (j > 0) [d[i], d[j]] = [d[j], d[i]];
-      }
-    }
-    room.deck = d;
-  }
+  if (!room.deck.length) room.deck = shuffle(cats.slice());
   let c = room.deck.shift();
   if (c === room.lastCat && room.deck.length) { room.deck.push(c); c = room.deck.shift(); }
   room.lastCat = c;
@@ -258,7 +245,7 @@ async function nextRound(room) {
   let bildPick = null;
   if (cat === "bild") {
     for (let i = 0; i < 4 && !bildPick; i++) {
-      const per = pick(room, "werbinich");
+      const per = pick(room, "bild");
       const im = await findImage(per);
       if (im) bildPick = { person: per, ...im };
     }
