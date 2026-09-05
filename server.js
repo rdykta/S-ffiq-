@@ -9,10 +9,35 @@ const PORT = process.env.PORT || 3000;
 const rooms = new Map(); // code -> room
 
 // ---------- statischer Webserver ----------
+// ---------- Version ----------
+// Wird beim Start aus dem Git-Stand abgeleitet und auf der Startseite angezeigt.
+// So sieht man sofort, ob ein Merge auf dem Server schon aktiv ist.
+const VERSION = (() => {
+  const pkg = require("./package.json");
+  const git = (cmd) => {
+    try { return require("child_process").execSync("git " + cmd, { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); }
+    catch (e) { return ""; }
+  };
+  const commit = (process.env.RENDER_GIT_COMMIT || git("rev-parse HEAD")).slice(0, 7);
+  const nr = git("rev-list --count HEAD");
+  const datum = git("log -1 --date=format:%d.%m.%Y --format=%cd");
+  const teile = [nr ? "v" + nr : "v" + pkg.version];
+  if (commit) teile.push(commit);
+  teile.push(datum || new Date().toLocaleDateString("de-DE"));
+  return { label: teile.join(" · "), commit, nr, datum, gestartet: new Date().toISOString() };
+})();
+
 const server = http.createServer((req, res) => {
+  if (req.url === "/version") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    return res.end(JSON.stringify(VERSION));
+  }
   const file = path.join(__dirname, "public", "index.html");
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, max-age=0" });
-  fs.createReadStream(file).pipe(res);
+  fs.readFile(file, "utf8", (err, html) => {
+    if (err) { res.writeHead(500); return res.end("Fehler beim Laden"); }
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, max-age=0" });
+    res.end(html.replace(/\{\{VERSION\}\}/g, VERSION.label));
+  });
 });
 const wss = new WebSocketServer({ server });
 
@@ -727,7 +752,7 @@ wss.on("connection", (ws) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === "IPv4" && !i.internal).map((i) => i.address);
-  console.log("\n  Trinkspiel läuft!\n");
+  console.log(`\n  Trinkspiel läuft!  (${VERSION.label})\n`);
   console.log(`  Du selbst:        http://localhost:${PORT}`);
   ips.forEach((ip) => console.log(`  Freunde im WLAN:  http://${ip}:${PORT}`));
   console.log("\n  Beenden mit Strg+C\n");

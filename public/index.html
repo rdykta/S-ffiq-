@@ -125,6 +125,7 @@
   .rulecard.info{border-color:var(--gold);font-weight:700;font-size:18px}
   .word{text-align:center;padding:6px 0 2px}
   .word b{display:block;font-size:clamp(26px,8vw,38px);letter-spacing:-.02em;color:var(--gold);line-height:1.1}
+  .ver{font-size:12px;color:var(--mute);opacity:.65;text-align:center;letter-spacing:.04em;font-variant-numeric:tabular-nums}
   .brand i{font-style:normal;color:var(--gold)}
   .center{text-align:center}
   .end .pl{padding:14px 16px}
@@ -227,7 +228,8 @@ function renderStart(){
         <button id="join" class="alt">Beitreten</button>
       </div>`}
     </div>
-    <p style="font-size:13px">Bitte trinkt verantwortungsvoll. Wasser ist auch ein Getränk.</p>`;
+    <p style="font-size:13px">Bitte trinkt verantwortungsvoll. Wasser ist auch ein Getränk.</p>
+    <p class="ver">{{VERSION}}</p>`;
   const name = ()=>{ const v=document.getElementById("name").value.trim(); if(!v){toast("Name fehlt.");return null;} sessionStorage.setItem("name",v); myName=v; return v; };
   document.getElementById("create").onclick=()=>{ const n=name(); if(n) send({t:"create",name:n}); };
   document.getElementById("join").onclick=()=>{ const n=name(); const c=document.getElementById("code").value; if(n&&c.length===4) send({t:"join",name:n,code:c}); else if(n) toast("Code hat 4 Zeichen."); };
