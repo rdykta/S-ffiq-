@@ -42,7 +42,8 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 - Wer bin ich?: 4 Tipps im 7-Sekunden-Takt (allgemein → eindeutig), Freitext.
   Falsche Tipps landen im Chat für alle, richtige werden als "[Name] hat es erraten!" gemeldet.
   Nach dem letzten Tipp bleiben 7 Sekunden. Richtig erraten = 0 Schlücke, nicht erraten = 1.
-  In der Liste stehen reale Personen und Fantasiefiguren (Gandalf, Harry Potter, Pippi Langstrumpf, James Bond …).
+  In der Liste stehen reale Personen und Fantasiefiguren (Gandalf, Harry Potter, Pippi Langstrumpf, James Bond …),
+  von Klassikern bis zu aktuellen Namen aus Musik, Social Media, Serien und Sport.
   Nachname reicht, kleine Tippfehler werden toleriert. Wer nah dran ist (Teilwort, Vorname, ähnliche
   Schreibweise), bekommt privat ein "Nah dran!" – in beiden Freitext-Kategorien.
 - Wer bin ich? (Bild): Artikelbild der Person aus der deutschen Wikipedia (Wikimedia Commons, mit Bildnachweis
