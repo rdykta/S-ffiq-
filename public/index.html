@@ -131,23 +131,28 @@
   .end .rank{width:28px;font-weight:900;color:var(--mute)}
   /* Tastatur offen: Bild, Tipps oder Zeichnung bleiben oben sichtbar, die Eingabe klebt unten.
      --vv ist die vom Browser gemeldete sichtbare Höhe (visualViewport). */
-  body.kb .top,body.kb .players,body.kb .hostbar,body.kb .credit{display:none}
-  body.kb .q{padding:4px 0 2px}
-  body.kb .q h2{font-size:19px;line-height:1.15}
-  body.kb .q .lab{margin-bottom:4px;font-size:13px}
-  body.kb .word b{font-size:24px}
-  body.kb .pic,body.kb .board,body.kb .hints,body.kb .player{
-    position:sticky;top:0;z-index:5;background:var(--bg);padding-bottom:6px;margin-bottom:0}
-  body.kb .pic{max-height:calc(var(--vv,100vh) * .40);aspect-ratio:auto;height:calc(var(--vv,100vh) * .40)}
-  body.kb .board{max-height:calc(var(--vv,100vh) * .40);aspect-ratio:auto;height:calc(var(--vv,100vh) * .40)}
-  body.kb .hints{max-height:calc(var(--vv,100vh) * .42);overflow-y:auto}
-  body.kb .hint{padding:8px 10px;font-size:15px}
+  /* Die Seite wird auf den sichtbaren Ausschnitt festgenagelt: kein Scrollen, nichts rutscht weg.
+     --vv = sichtbare Höhe, --vtop = Verschiebung des Ausschnitts (iOS schiebt die Seite beim Fokus hoch). */
+  body.kb{position:fixed;left:0;right:0;top:0;height:var(--vv,100vh);overflow:hidden}
+  body.kb #app{height:var(--vv,100vh);max-width:520px;padding:6px 14px 8px;
+    display:flex;flex-direction:column;gap:6px;overflow:hidden;transform:translateY(calc(var(--vtop,0px) * -1))}
+  body.kb .top,body.kb .players,body.kb .hostbar,body.kb .credit,body.kb .wait{display:none}
+  body.kb .timer{order:1;flex:0 0 auto;height:8px;margin-top:0}
+  body.kb .timer-lab{display:none}
+  body.kb .q{order:2;flex:0 0 auto;padding:0}
+  body.kb .q h2{font-size:17px;line-height:1.15}
+  body.kb .q .lab{margin-bottom:2px;font-size:12px}
+  body.kb .word{padding:0}
+  body.kb .word b{font-size:22px}
+  body.kb .word p{font-size:12px}
+  body.kb .pic,body.kb .board,body.kb .player{order:3;flex:0 1 auto;min-height:0;aspect-ratio:auto;
+    height:calc(var(--vv,100vh) * .40);max-height:calc(var(--vv,100vh) * .40);margin:0}
+  body.kb .hints{order:3;flex:0 1 auto;min-height:0;max-height:calc(var(--vv,100vh) * .42);overflow-y:auto;gap:5px}
+  body.kb .hint{padding:7px 10px;font-size:15px}
   body.kb .hint.pending{display:none}
-  body.kb .chat{max-height:calc(var(--vv,100vh) * .22);min-height:0}
-  body.kb .guess{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:6;background:var(--bg);
-    padding:8px 18px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -10px 18px rgba(27,15,43,.75)}
-  body.kb #app{padding-bottom:calc(var(--kb,0px) + 86px)}
-  body.kb #near{min-height:0}
+  body.kb .chat{order:6;flex:1 1 auto;min-height:34px;max-height:none}
+  body.kb #near{order:7;flex:0 0 auto;min-height:0;font-size:13px}
+  body.kb .guess{order:8;flex:0 0 auto;margin:0}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -423,10 +428,17 @@ function kbInit(){
   const vv=window.visualViewport; if(!vv) return;
   const upd=()=>{
     const kb=Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    document.documentElement.style.setProperty("--vv", vv.height+"px");
-    document.documentElement.style.setProperty("--kb", kb+"px");
+    const r=document.documentElement.style;
+    r.setProperty("--vv", vv.height+"px");
+    r.setProperty("--kb", kb+"px");
+    r.setProperty("--vtop", (vv.offsetTop||0)+"px");
     const tippt=document.activeElement && document.activeElement.tagName==="INPUT";
-    document.body.classList.toggle("kb", kb>120 && !!tippt);
+    const an = kb>120 && !!tippt;
+    const vorher=document.body.classList.contains("kb");
+    document.body.classList.toggle("kb", an);
+    // Der Browser scrollt beim Fokus selbst nach unten – das machen wir rückgängig,
+    // sonst steht der obere Teil (Bild, erster Tipp) außerhalb des Ausschnitts.
+    if(an){ window.scrollTo(0,0); if(!vorher) setTimeout(()=>{ window.scrollTo(0,0); upd(); },80); }
   };
   vv.addEventListener("resize",upd); vv.addEventListener("scroll",upd);
   document.addEventListener("focusin",e=>{ if(e.target.tagName==="INPUT") setTimeout(upd,60); });
