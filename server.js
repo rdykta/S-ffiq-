@@ -224,23 +224,11 @@ async function findImage(person) {
   imageCache.set(person.name, res); return res;
 }
 
-// Markenlogo von Wikimedia Commons: Datei prüfen und als 640px-Thumbnail (bei SVG als PNG) holen
-const logoCache = new Map();
-async function findLogo(brand) {
-  if (process.env.SUEFFIQ_STUB_IMAGE) return { url: process.env.SUEFFIQ_STUB_IMAGE, page: brand.file };
-  if (logoCache.has(brand.file)) return logoCache.get(brand.file);
-  const url = "https://commons.wikimedia.org/w/api.php?" + new URLSearchParams({ action: "query", titles: "File:" + brand.file, redirects: "1", prop: "imageinfo", iiprop: "url", iiurlwidth: "640", format: "json" });
-  let res = null;
-  try {
-    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
-    const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "SueffIQ/1.0 (Partyspiel; Markenlogos von Wikimedia Commons)" } }); clearTimeout(to);
-    const d = await r.json();
-    const pg = Object.values((d.query || {}).pages || {})[0];
-    const ii = pg && !("missing" in pg) && pg.imageinfo && pg.imageinfo[0];
-    if (ii && (ii.thumburl || ii.url)) res = { url: ii.thumburl || ii.url, page: pg.title.replace(/^File:/, "") };
-  } catch (e) { /* nächster Versuch */ }
-  logoCache.set(brand.file, res);
-  return res;
+// Markenlogo als Bild: Vektorsymbol aus questions.js auf hellem Grund, direkt als Data-URI.
+// Kein Netzabruf – dadurch keine fehlenden Dateien und kein Warten vor der Runde.
+function logoImage(brand) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 30 30"><rect x="-3" y="-3" width="30" height="30" fill="#FFF7E6"/><path d="${brand.path}" fill="#${brand.hex}"/></svg>`;
+  return "data:image/svg+xml;base64," + Buffer.from(svg, "utf8").toString("base64");
 }
 
 // Song-Vorschau aus dem iTunes-Katalog (öffentliche Such-API, 30-Sekunden-Preview)
@@ -324,15 +312,7 @@ async function nextRound(room) {
     }
     if (!bildPick) { cat = room.categories.find((c) => !["bild", "song"].includes(c)) || "trivia"; room.lastCat = cat; }
   }
-  let logoPick = null;
-  if (cat === "logo") {
-    for (let i = 0; i < 4 && !logoPick; i++) {
-      const br = pick(room, "logo");
-      const im = await findLogo(br);
-      if (im) logoPick = { brand: br, ...im };
-    }
-    if (!logoPick) { cat = room.categories.find((c) => !["logo", "bild", "song"].includes(c)) || "trivia"; room.lastCat = cat; }
-  }
+  const logoPick = cat === "logo" ? pick(room, "logo") : null;
   const connected = room.order.filter((id) => room.players[id].connected);
   let cur = { type: cat, label: CATS[cat], answers: {} };
 
@@ -356,7 +336,7 @@ async function nextRound(room) {
       cur.fic = !!bildPick.person.en; // Figur: Bild komplett einpassen statt beschneiden
       cur.text = "Wer bin ich?";
     } else {
-      cur.brand = logoPick.brand; cur.image = logoPick.url; cur.page = logoPick.page; cur.fic = true;
+      cur.brand = logoPick; cur.image = logoImage(logoPick); cur.fic = true;
       cur.text = "Welche Marke ist das?";
     }
     cur.revealed = 1; cur.chat = []; cur.solved = {};
@@ -467,7 +447,7 @@ function resolve(room) {
   } else if (cur.type === "werbinich" || cur.type === "bild" || cur.type === "logo") {
     res.text = ""; res.answer = cur.type === "logo" ? cur.brand.name : cur.person.name; res.chat = cur.chat;
     if (cur.type === "bild") { res.image = cur.image; res.page = cur.page; res.lang = cur.lang; res.fic = cur.fic; }
-    if (cur.type === "logo") { res.image = cur.image; res.page = cur.page; res.fic = true; }
+    if (cur.type === "logo") { res.image = cur.image; res.fic = true; }
     const connected = room.order.filter((id) => P[id].connected);
     connected.forEach((id) => {
       const sv = cur.solved[id];
