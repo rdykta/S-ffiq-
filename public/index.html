@@ -327,7 +327,7 @@ function renderQuestion(){
   } else if(c.type==="bild"||c.type==="logo"){
     const solved=(c.solvedBy||[]).includes(S.you), logo=c.type==="logo";
     body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div>${logo?`<h2 style="font-size:24px">Welche Marke ist das?</h2>`:""}</div>
-      <div class="pic ${c.fic?"fit":""}"><img id="pic" src="${esc(c.image)}" alt="" style="filter:blur(${blurPx(c)}px)"><span class="stage" id="stage">Stufe ${c.revealed}/${c.stages}</span></div>
+      <div class="pic ${c.fic?"fit":""}"><img id="pic" src="${esc(c.image)}" alt=""${logo?"":` style="filter:blur(${blurPx(c)}px)"`}>${logo?"":`<span class="stage" id="stage">Stufe ${c.revealed}/${c.stages}</span>`}</div>
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
       :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="${logo?"Welche Marke?":"Wer bin ich?"}" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
@@ -447,7 +447,7 @@ function renderResults(){
   if(r.type==="werbinich"||r.type==="song"||r.type==="bild"||r.type==="logo"){
     const credit = r.type==="logo" ? `Symbol: Simple Icons (CC0)` : `Bild: ${r.lang==="en"?"englischer":"deutscher"} Wikipedia-Artikel „${esc(r.page||r.answer)}“${r.lang==="en"?"":" (Wikimedia Commons)"}`;
     extra = `<div class="card stack">${r.image?`<div class="pic ${r.fic?"fit":""}" style="max-height:38vh"><img src="${esc(r.image)}" alt="" style="transform:none"></div><p class="credit">${credit}</p>`:""}<div class="center"><p>${r.type==="song"||r.type==="logo"?"Das war":"Ich war"}</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div>${r.artist?`<p style="margin-top:4px">${esc(r.artist)}</p>`:""}</div>
-      ${r.solvers.length?r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>${sv.hint?`bei ${r.type==="bild"||r.type==="logo"?"Stufe":"Tipp"} ${sv.hint}`:"✓ erkannt"}</span></div>`).join(""):""}
+      ${r.solvers.length?r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>${sv.hint&&r.type!=="logo"?`bei ${r.type==="bild"?"Stufe":"Tipp"} ${sv.hint}`:"✓ erkannt"}</span></div>`).join(""):""}
       <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
   }
   if(r.votes){
@@ -492,7 +492,7 @@ function patchWbi(){
       + Array.from({length:c.hintCount-c.hints.length},(_,i)=>`<div class="hint pending">Tipp ${c.hints.length+i+1} kommt gleich…</div>`).join("");
   }
   const pic=document.getElementById("pic"), st=document.getElementById("stage");
-  if(pic){ pic.style.filter=`blur(${blurPx(c)}px)`; if(st) st.textContent=`Stufe ${c.revealed}/${c.stages}`; }
+  if(pic && c.revealed){ pic.style.filter=`blur(${blurPx(c)}px)`; if(st) st.textContent=`Stufe ${c.revealed}/${c.stages}`; }
   const atBottom = ch.scrollHeight-ch.scrollTop-ch.clientHeight<40;
   ch.innerHTML=chatHtml(c.chat); if(atBottom) ch.scrollTop=ch.scrollHeight;
   const solved=(c.solvedBy||[]).includes(S.you), row=document.getElementById("g");
