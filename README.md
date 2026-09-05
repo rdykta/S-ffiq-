@@ -65,7 +65,8 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
-  Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`).
+  Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`) – Partyhits von den 80ern bis heute,
+  nach Jahrzehnten gegliedert, dazu Malle-, Karnevals- und Après-Ski-Klassiker. Geraten wird der Titel.
 - Regeln & Events: kein Raten, nur ein Screen. Eine neue Regel erscheint ("Nur noch mit links trinken", "Vor dem Trinken
   auf den Tisch klopfen", "[Name] sucht sich einen Trink-Buddy" …) und gilt ab sofort. Irgendwann in den nächsten 10 bis
   30 Runden kommt ein eigener Screen "Regel aufgehoben". Nie mehr als zwei Regeln gleichzeitig; ist das Limit erreicht,
