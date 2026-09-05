@@ -199,29 +199,82 @@ function pick(room, cat) {
 
 
 // Artikelbild aus der Wikipedia. Personen: deutsche Wikipedia (i. d. R. Wikimedia Commons, frei lizenziert).
-// Figuren (Eintrag mit en): englische Wikipedia, weil die deutsche für Zeichentrickfiguren meist kein Bild hat;
-// dort dürfen auch nicht-freie Figurenbilder im Artikel stehen (pilicense=any). Danach Fallback auf die deutsche.
+// Figuren (Eintrag mit en): englische Wikipedia mit exaktem Artikeltitel, weil die deutsche für Zeichentrickfiguren
+// meist kein Bild hat; dort dürfen auch nicht-freie Figurenbilder im Artikel stehen (pilicense=any).
+//
+// Wichtig für Figuren: Das Artikelbild ist oft gar nicht die Figur, sondern ein Buchcover, Filmplakat, Serienlogo
+// oder eine Schrifttafel. Solche Dateien werden am Dateinamen erkannt und verworfen; danach werden die übrigen
+// Bilder des Artikels durchgesehen. Findet sich nichts Brauchbares, liefert findImage null und die Runde zieht
+// eine andere Figur, statt ein unbrauchbares Bild zu zeigen.
 const imageCache = new Map();
-async function wikiImage(lang, term, anyLicense) {
-  const params = { action: "query", generator: "search", gsrsearch: term, gsrlimit: "1", gsrnamespace: "0", prop: "pageimages", piprop: "thumbnail|name", pithumbsize: "640", format: "json" };
-  if (anyLicense) params.pilicense = "any";
-  const url = `https://${lang}.wikipedia.org/w/api.php?` + new URLSearchParams(params);
+const BAD_IMAGE = /(cover|poster|logo|wordmark|title[_ -]?card|titlecard|\bbook\b|dvd|blu[_ -]?ray|vhs|soundtrack|album|magazine|stamp|briefmarke|banner|sign(?:board)?|schrift|font|typeface|text|caption|map|karte|chart|diagram|screenshot|box[_ -]?art|packaging|cast|premiere|convention|cosplay|statue|figurine|toy|plush|mural|graffiti|tattoo|balloon|parade|float|costume|waxwork|madame[_ -]?tussaud)/i;
+const GENERIC_IMAGE = /(commons-logo|wiki(pedia|media|source|quote|data)|question[_ -]?book|disambig|ambox|edit-clear|nuvola|crystal|folder|padlock|symbol|icon|flag[_ -]?of|coat[_ -]?of[_ -]?arms|blank|placeholder|spoiler|star[_ -]?full|portal)/i;
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
+const okImageName = (n) => !!n && IMAGE_EXT.test(n) && !BAD_IMAGE.test(n) && !GENERIC_IMAGE.test(n);
+
+async function wikiApi(lang, params) {
+  const url = `https://${lang}.wikipedia.org/w/api.php?` + new URLSearchParams({ ...params, format: "json" });
   try {
     const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
-    const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "SueffIQ/1.0 (Partyspiel; Wikipedia-Artikelbilder)" } }); clearTimeout(to);
-    const d = await r.json();
-    const pg = Object.values((d.query || {}).pages || {})[0];
-    if (pg && pg.thumbnail && pg.thumbnail.source) return { url: pg.thumbnail.source, page: pg.title, lang };
-  } catch (e) { /* nächster Versuch */ }
+    const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "SueffIQ/1.0 (Partyspiel; Wikipedia-Artikelbilder)" } });
+    clearTimeout(to);
+    return await r.json();
+  } catch (e) { return null; }
+}
+
+// Personen: erstes Suchergebnis, dessen Artikelbild brauchbar aussieht
+async function personImage(lang, term) {
+  const d = await wikiApi(lang, { action: "query", generator: "search", gsrsearch: term, gsrlimit: "1", gsrnamespace: "0", prop: "pageimages", piprop: "thumbnail|name", pithumbsize: "640" });
+  const pg = d && Object.values((d.query || {}).pages || {})[0];
+  if (pg && pg.thumbnail && pg.thumbnail.source && !GENERIC_IMAGE.test(pg.pageimage || "")) {
+    return { url: pg.thumbnail.source, page: pg.title, lang };
+  }
   return null;
 }
+
+// Figuren: exakter Artikeltitel, Artikelbild nur wenn es kein Cover/Plakat/Logo ist, sonst weitere Artikelbilder
+async function characterImage(lang, title) {
+  // Erst der exakte Artikeltitel; gibt es ihn nicht, die Suche als Rückfall
+  let d = await wikiApi(lang, { action: "query", titles: title, redirects: "1", prop: "pageimages", piprop: "thumbnail|name", pithumbsize: "640", pilicense: "any" });
+  let pg = d && Object.values((d.query || {}).pages || {})[0];
+  if (!pg || "missing" in pg) {
+    d = await wikiApi(lang, { action: "query", generator: "search", gsrsearch: title, gsrlimit: "1", gsrnamespace: "0", prop: "pageimages", piprop: "thumbnail|name", pithumbsize: "640", pilicense: "any" });
+    pg = d && Object.values((d.query || {}).pages || {})[0];
+    if (!pg) return null;
+    title = pg.title;
+  }
+  if (pg.thumbnail && pg.thumbnail.source && okImageName(pg.pageimage)) {
+    return { url: pg.thumbnail.source, page: pg.title, lang };
+  }
+  // Artikelbild unbrauchbar: übrige Bilder des Artikels durchsehen
+  const d2 = await wikiApi(lang, { action: "query", titles: title, redirects: "1", prop: "images", imlimit: "30" });
+  const pg2 = d2 && Object.values((d2.query || {}).pages || {})[0];
+  const files = ((pg2 && pg2.images) || []).map((i) => i.title).filter((t) => okImageName(t.replace(/^File:/, "")));
+  if (!files.length) return null;
+  const d3 = await wikiApi(lang, { action: "query", titles: files.slice(0, 5).join("|"), prop: "imageinfo", iiprop: "url|size", iiurlwidth: "640" });
+  const pages = d3 && Object.values((d3.query || {}).pages || {});
+  for (const p of pages || []) {
+    const ii = p.imageinfo && p.imageinfo[0];
+    if (ii && (ii.thumburl || ii.url) && (ii.width || 0) >= 200 && (ii.height || 0) >= 200) {
+      return { url: ii.thumburl || ii.url, page: pg.title, lang };
+    }
+  }
+  return null;
+}
+
 async function findImage(person) {
   if (process.env.SUEFFIQ_STUB_IMAGE) return { url: process.env.SUEFFIQ_STUB_IMAGE, page: person.name, lang: person.en ? "en" : "de" };
   if (imageCache.has(person.name)) return imageCache.get(person.name);
-  const tries = person.en ? [["en", person.en, true], ["de", person.name, false]] : [["de", person.name, false], ["de", person.alt[0], false]];
   let res = null;
-  for (const [lang, term, any] of tries) { if (term) res = await wikiImage(lang, term, any); if (res) break; }
-  imageCache.set(person.name, res); return res;
+  if (person.en) {
+    res = await characterImage("en", person.en);
+    if (!res) res = await characterImage("de", person.name);
+  } else {
+    res = await personImage("de", person.name);
+    if (!res && person.alt[0]) res = await personImage("de", person.alt[0]);
+  }
+  imageCache.set(person.name, res);
+  return res;
 }
 
 // Markenlogo als Bild: Vektorsymbol aus questions.js auf hellem Grund, direkt als Data-URI.
@@ -305,7 +358,7 @@ async function nextRound(room) {
   }
   let bildPick = null;
   if (cat === "bild") {
-    for (let i = 0; i < 4 && !bildPick; i++) {
+    for (let i = 0; i < 8 && !bildPick; i++) {
       const per = pick(room, "bild");
       const im = await findImage(per);
       if (im) bildPick = { person: per, ...im };

@@ -49,8 +49,12 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   "Nah dran" und Schlücke wie bei "Wer bin ich". Eigene Liste in `questions.js` unter `bild`: sehr bekannte,
   überwiegend aktuelle Personen (`{ name: "Taylor Swift", alt: ["Swift"] }`), ein paar Weltberühmtheiten der Geschichte
   und bekannte Zeichentrick-, Animations- und Comicfiguren (`{ name: "Homer Simpson", alt: ["Homer"], en: "Homer Simpson" }`).
-  Figuren haben in der deutschen Wikipedia meist kein Bild, deshalb kommt ihr Bild über den Suchbegriff `en` aus der
-  englischen Wikipedia (dort auch nicht-freie Figurenbilder, Nachweis in der Auflösung). Der Nachname bzw. die Figur
+  Figuren haben in der deutschen Wikipedia meist kein Bild, deshalb kommt ihr Bild über `en` aus der englischen
+  Wikipedia (dort auch nicht-freie Figurenbilder, Nachweis in der Auflösung). Bei Figuren ist das Artikelbild oft
+  ein Buchcover, Filmplakat oder Serienlogo statt der Figur – solche Dateien erkennt der Server am Dateinamen und
+  nimmt stattdessen ein anderes Bild aus dem Artikel. Findet sich keins, wird die Figur übersprungen und eine
+  andere gezogen, es erscheint also nie ein Cover. Bilder selbst prüfen: `npm run bildcheck` erzeugt
+  `bildcheck.html` mit allen Figurenbildern zum Durchsehen (`node tools/bildcheck.js alle` nimmt Personen dazu). Der Nachname bzw. die Figur
   allein reicht beim Raten ("Simpson", "Homer").
 - Logo-Quiz: eine Bildmarke ohne Schriftzug (Apfel, Swoosh, Stern, Sirene …) startet verschwommen und wird wie bei
   "Wer bin ich? (Bild)" in 5 Stufen alle 7 Sekunden schärfer. Raten per Freitext mit Chat und "Nah dran". Nicht erkannt =
