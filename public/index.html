@@ -347,7 +347,8 @@ function renderQuestion(){
   } else if(c.type==="song"){
     const solved=(c.solvedBy||[]).includes(S.you);
     body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div><h2 style="font-size:24px">Welcher Song ist das?</h2></div>
-      <div class="player"><img class="art" src="${esc(c.art||"")}" alt=""><div style="flex:1"><button id="play" class="pink">▶ Abspielen</button><div class="prog"><i id="prog"></i></div></div></div>
+      <div class="player"><img class="art" src="${esc(c.art||"")}" alt=""><div style="flex:1"><button id="play" class="pink">▶ Abspielen</button><div class="prog"><i id="prog"></i></div></div><button id="mute" class="alt" style="flex:0 0 54px;padding:14px 0;font-size:20px" title="Nur dieses Handy stummschalten">🔊</button></div>
+      ${isHost()?`<button id="playall" class="alt small">▶ Bei allen gleichzeitig starten</button>`:""}
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
       :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Songtitel eingeben" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
@@ -397,23 +398,69 @@ function pop(){
     o.connect(f).connect(g).connect(ac.destination); o.start(t); o.stop(t+0.14);
   }catch{}
 }
-document.addEventListener("click",e=>{ if(S && (S.phase==="question"||S.phase==="results") && e.target.closest("button")) pop(); },true);
+document.addEventListener("click",e=>{ unlockAudio(); if(S && (S.phase==="question"||S.phase==="results") && e.target.closest("button")) pop(); },true);
 
-let audio=null, audioKey=null;
-function stopAudio(){ if(audio){ audio.pause(); audio=null; } }
+// ---------- Song-Wiedergabe ----------
+// Ein einziges Audio-Element für die ganze Sitzung: Mobile Browser lassen Ton nur nach einer Berührung zu.
+// Das Element wird beim ersten Tippen stumm freigeschaltet, danach darf der Server es synchron starten.
+const SILENCE="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=";
+let audioEl=null, audioSrc="", audioUnlocked=false, syncedAt=null, syncTimer=null;
+let muted = localStorage.getItem("sq_muted")==="1";
+function getAudio(){
+  if(!audioEl){ audioEl=new Audio(); audioEl.preload="auto"; audioEl.muted=muted; }
+  return audioEl;
+}
+function unlockAudio(){
+  if(audioUnlocked) return;
+  const a=getAudio(), warSrc=a.src;
+  a.muted=true; if(!warSrc) a.src=SILENCE;
+  const p=a.play();
+  if(p&&p.then) p.then(()=>{ a.pause(); try{a.currentTime=0;}catch{} a.muted=muted; audioUnlocked=true; }).catch(()=>{});
+}
+function stopAudio(){ if(syncTimer){ clearTimeout(syncTimer); syncTimer=null; } if(audioEl){ audioEl.pause(); } syncedAt=null; }
+function setMuted(v){ muted=v; localStorage.setItem("sq_muted", v?"1":"0"); if(audioEl) audioEl.muted=v; }
+// Song ab Sekunde "ab" abspielen (für den synchronen Start und für späteres Dazukommen)
+function playFrom(ab){
+  const a=getAudio(), src=S.current.preview;
+  if(audioSrc!==src){ a.src=src; audioSrc=src; }
+  a.muted=muted;
+  const los=()=>{ try{ a.currentTime=Math.max(0,ab); }catch{} const p=a.play(); if(p&&p.catch) p.catch(()=>toast("Zum Abspielen kurz auf den Knopf tippen.")); };
+  if(a.readyState>=1) los(); else { a.addEventListener("loadedmetadata", los, {once:true}); a.load(); }
+}
+// Gemeinsamer Startzeitpunkt vom Server: alle Handys starten zur selben Serverzeit
+function syncPlayback(){
+  const c=S.current; if(!c||c.type!=="song"||!c.playAt) return;
+  if(syncedAt===c.playAt) return;                 // dieser Start ist schon eingeplant
+  syncedAt=c.playAt;
+  if(syncTimer){ clearTimeout(syncTimer); syncTimer=null; }
+  const rest=c.playAt-(Date.now()+clockOffset);
+  if(rest>0) syncTimer=setTimeout(()=>{ syncTimer=null; playFrom(0); updatePlayUi(); }, rest);
+  else if(rest>-30000) playFrom(-rest/1000);      // später dazugekommen: an der passenden Stelle einsteigen
+  updatePlayUi();
+}
+function updatePlayUi(){
+  const btn=document.getElementById("play"), mb=document.getElementById("mute"), a=audioEl;
+  if(mb) mb.textContent = muted?"🔇":"🔊";
+  if(!btn) return;
+  const c=S.current, wartet = c&&c.playAt ? c.playAt-(Date.now()+clockOffset) : -1;
+  if(wartet>0){ btn.textContent="Startet in "+Math.ceil(wartet/1000)+" …"; return; }
+  btn.textContent = a&&!a.paused ? "❚❚ Pause" : (a&&a.currentTime>0 ? "▶ Weiter" : "▶ Abspielen");
+}
 function bindPlayer(){
   const btn=document.getElementById("play"), prog=document.getElementById("prog"); if(!btn) return;
   const key=S.code+":"+S.round;
   if(audioKey!==key){ stopAudio(); audioKey=key; }
-  const upd=()=>{ if(audio&&prog&&audio.duration) prog.style.width=(audio.currentTime/audio.duration*100)+"%"; };
-  const setLabel=()=>{ btn.textContent = audio&&!audio.paused ? "❚❚ Pause" : (audio&&audio.currentTime>0?"▶ Weiter":"▶ Abspielen"); };
-  if(audio){ audio.ontimeupdate=upd; audio.onended=setLabel; setLabel(); upd(); }
-  btn.onclick=()=>{
-    if(!audio){ audio=new Audio(S.current.preview); audio.preload="auto"; audio.ontimeupdate=upd; audio.onended=setLabel; audio.onerror=()=>toast("Vorschau konnte nicht geladen werden."); }
-    if(audio.paused) audio.play().catch(()=>toast("Bitte nochmal tippen.")); else audio.pause();
-    setTimeout(setLabel,50);
-  };
+  const a=getAudio();
+  a.ontimeupdate=()=>{ if(prog&&a.duration) prog.style.width=(a.currentTime/a.duration*100)+"%"; };
+  a.onended=updatePlayUi;
+  a.onerror=()=>toast("Vorschau konnte nicht geladen werden.");
+  btn.onclick=()=>{ if(a.paused) playFrom(a.currentTime||0); else a.pause(); setTimeout(updatePlayUi,50); };
+  const mb=document.getElementById("mute"); if(mb) mb.onclick=()=>{ setMuted(!muted); updatePlayUi(); };
+  const pa=document.getElementById("playall"); if(pa) pa.onclick=()=>send({t:"playSong"});
+  updatePlayUi();
+  syncPlayback();
 }
+let audioKey=null;
 let timerRaf=null, clockOffset=0;
 function startTimer(){
   const c=S.current; const fill=document.getElementById("tfill"), lab=document.getElementById("tlab"), box=document.getElementById("timer");
@@ -567,7 +614,7 @@ function render(){
   if(S.phase==="question"){
     const key=S.code+":"+S.round;
     const chatty = ["werbinich","song","bild","malen","logo"].includes(S.current.type);
-    if(chatty && wbiKey===key && patchWbi()) return;
+    if(chatty && wbiKey===key && patchWbi()){ if(S.current.type==="song"){ updatePlayUi(); syncPlayback(); } return; }
     wbiKey = chatty ? key : null;
     renderQuestion(); startTimer(); return;
   }

@@ -64,7 +64,12 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   in einer 24x24-Fläche, `hex` die Farbe). Symbole aus dem Simple-Icons-Satz (CC0).
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
-  Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
+  Jedes Handy hat einen Abspielen-Button. Der Roundmaster kann den Song zusätzlich "Bei allen gleichzeitig starten":
+  Der Server gibt einen Startzeitpunkt 1,5 Sekunden voraus (`PLAY_LEAD_MS` in `server.js`), alle Handys starten dann
+  zur selben Serverzeit. Wer später dazukommt, steigt an der richtigen Stelle im Song ein. Jedes Handy hat einen
+  eigenen Stummschalter (🔊/🔇, wird gemerkt) – so kann eine Box am Handy des Roundmasters laut spielen, während die
+  anderen stumm mitlaufen und nur den Fortschrittsbalken sehen. Damit Handys überhaupt Ton abspielen dürfen, wird das
+  Audio beim ersten Tippen im Spiel stumm freigeschaltet. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
   Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`) – Partyhits von den 80ern bis heute,
   nach Jahrzehnten gegliedert, dazu Malle-, Karnevals- und Après-Ski-Klassiker. Geraten wird der Titel.
 - Regeln & Events: kein Raten, nur ein Screen. Eine neue Regel erscheint ("Nur noch mit links trinken", "Vor dem Trinken
