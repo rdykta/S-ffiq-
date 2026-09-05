@@ -91,6 +91,13 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 - Handy kurz zu oder Standby? Die App verbindet sich von selbst neu und holt den aktuellen Stand, sobald sie wieder
   offen ist (Ping alle 20 s, bei ausbleibender Antwort wird die Verbindung ersetzt). Zur Not: Seite neu laden, man landet wieder in der Runde.
 
+## Version prüfen
+
+Unten auf der Startseite steht die laufende Version, zum Beispiel `v70 · aeb06db · 05.09.2026`:
+Nummer (Anzahl der Commits), kurzer Commit-Hash und Datum. Damit lässt sich auf einen Blick erkennen,
+ob ein Merge auf dem Server schon aktiv ist – den Hash einfach mit dem letzten Commit auf GitHub vergleichen.
+Auf Render kommt der Hash aus `RENDER_GIT_COMMIT`, lokal direkt aus Git. Maschinenlesbar unter `/version`.
+
 ## Eigene Fragen
 
 Alle Fragen stehen in `questions.js` – Zeilen ergänzen, Server neu starten.
