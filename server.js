@@ -55,7 +55,6 @@ const CATS = {
 const RULE_MIN = 10, RULE_MAX = 30, RULE_MAX_ACTIVE = 2; // Regel gilt 10–30 Runden, höchstens 2 gleichzeitig
 const BLUR_STAGES = 5;
 const HINT_MS = 7000;
-const PLAY_LEAD_MS = 1500;      // Vorlauf, damit alle Handys denselben Startzeitpunkt treffen
 const DRAW_SEC = 60;            // Zeichenzeit pro Runde (fest, unabhängig von der Antwortzeit)
 const DRAW_COLORS = ["#1b0f2b", "#e63946", "#1d6fe0", "#2a9d3f", "#f5b82e", "#8b5a2b", "#ff4f8b", "#fff7e6"]; // letzter = Radierer (Papierfarbe)
 const DRAW_MAX_STROKES = 600, DRAW_MAX_POINTS = 40000;
@@ -613,12 +612,6 @@ wss.on("connection", (ws) => {
     if (m.t === "start" && isHost) {
       if (room.order.filter((id) => room.players[id].connected).length < 1) return err("Niemand da.");
       return nextRound(room);
-    }
-    if (m.t === "playSong" && isHost && room.phase === "question" && room.current.type === "song") {
-      // Startzeit knapp in der Zukunft: liegt im State, also startet auch ein später verbundenes Handy an der
-      // richtigen Stelle. Die Uhren gleichen die Clients über das now-Feld ab.
-      room.current.playAt = Date.now() + PLAY_LEAD_MS;
-      return broadcast(room);
     }
     if (m.t === "next" && isHost && room.phase === "results") return nextRound(room);
     if (m.t === "skip" && isHost && room.phase === "question") return nextRound(room);
