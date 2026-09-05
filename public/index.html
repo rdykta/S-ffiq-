@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>SüffIQ – das Trinkspiel</title>
 <style>
   :root{
@@ -129,6 +129,25 @@
   .center{text-align:center}
   .end .pl{padding:14px 16px}
   .end .rank{width:28px;font-weight:900;color:var(--mute)}
+  /* Tastatur offen: Bild, Tipps oder Zeichnung bleiben oben sichtbar, die Eingabe klebt unten.
+     --vv ist die vom Browser gemeldete sichtbare Höhe (visualViewport). */
+  body.kb .top,body.kb .players,body.kb .hostbar,body.kb .credit{display:none}
+  body.kb .q{padding:4px 0 2px}
+  body.kb .q h2{font-size:19px;line-height:1.15}
+  body.kb .q .lab{margin-bottom:4px;font-size:13px}
+  body.kb .word b{font-size:24px}
+  body.kb .pic,body.kb .board,body.kb .hints,body.kb .player{
+    position:sticky;top:0;z-index:5;background:var(--bg);padding-bottom:6px;margin-bottom:0}
+  body.kb .pic{max-height:calc(var(--vv,100vh) * .40);aspect-ratio:auto;height:calc(var(--vv,100vh) * .40)}
+  body.kb .board{max-height:calc(var(--vv,100vh) * .40);aspect-ratio:auto;height:calc(var(--vv,100vh) * .40)}
+  body.kb .hints{max-height:calc(var(--vv,100vh) * .42);overflow-y:auto}
+  body.kb .hint{padding:8px 10px;font-size:15px}
+  body.kb .hint.pending{display:none}
+  body.kb .chat{max-height:calc(var(--vv,100vh) * .22);min-height:0}
+  body.kb .guess{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:6;background:var(--bg);
+    padding:8px 18px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -10px 18px rgba(27,15,43,.75)}
+  body.kb #app{padding-bottom:calc(var(--kb,0px) + 86px)}
+  body.kb #near{min-height:0}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -322,14 +341,14 @@ function renderQuestion(){
     body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div></div>
       <div class="hints" id="hints">${hints}</div>
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
-      :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Wer bin ich?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
+      :`<div class="row guess"><input id="g" type="text" autocomplete="off" placeholder="Wer bin ich?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${c.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg ${m.name===me().name?"mine":""}"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div>`;
   } else if(c.type==="bild"||c.type==="logo"){
     const solved=(c.solvedBy||[]).includes(S.you), logo=c.type==="logo";
     body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div>${logo?`<h2 style="font-size:24px">Welche Marke ist das?</h2>`:""}</div>
       <div class="pic ${c.fic?"fit":""}"><img id="pic" src="${esc(c.image)}" alt=""${logo?"":` style="filter:blur(${blurPx(c)}px)"`}>${logo?"":`<span class="stage" id="stage">Stufe ${c.revealed}/${c.stages}</span>`}</div>
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
-      :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="${logo?"Welche Marke?":"Wer bin ich?"}" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
+      :`<div class="row guess"><input id="g" type="text" autocomplete="off" placeholder="${logo?"Welche Marke?":"Wer bin ich?"}" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
   } else if(c.type==="malen"){
     const solved=(c.solvedBy||[]).includes(S.you), drawer=c.drawer===S.you;
@@ -342,21 +361,21 @@ function renderQuestion(){
           <button class="sz ${drawTool.w===4?"on":""}" data-w="4">dünn</button><button class="sz ${drawTool.w===8?"on":""}" data-w="8">mittel</button><button class="sz ${drawTool.w===16?"on":""}" data-w="16">dick</button>
           <button class="clr" id="clear">Alles löschen</button></div>`
       :solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
-      :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Was wird gezeichnet?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
+      :`<div class="row guess"><input id="g" type="text" autocomplete="off" placeholder="Was wird gezeichnet?" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
   } else if(c.type==="song"){
     const solved=(c.solvedBy||[]).includes(S.you);
     body = `<div class="q" style="padding-top:10px"><div class="lab">${esc(c.label)}</div><h2 style="font-size:24px">Welcher Song ist das?</h2></div>
       <div class="player"><img class="art" src="${esc(c.art||"")}" alt=""><div style="flex:1"><button id="play" class="pink">▶ Abspielen</button><div class="prog"><i id="prog"></i></div></div></div>
       ${solved?`<p class="wait" style="color:#54E07E;font-weight:800">Du hast's! Die anderen raten noch.</p>`
-      :`<div class="row"><input id="g" type="text" autocomplete="off" placeholder="Songtitel eingeben" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
+      :`<div class="row guess"><input id="g" type="text" autocomplete="off" placeholder="Songtitel eingeben" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 32%">Raten</button></div><div id="near" class="wait" style="min-height:18px"></div>`}
       <div class="chat" id="chat">${chatHtml(c.chat)}</div>`;
   } else if(c.type==="trivia"){
     body = `<div class="q"><div class="lab">${esc(c.label)}</div><h2>${esc(c.text)}</h2></div>`
       + (answered?wait():`<div class="vote">${c.options.map((o,i)=>`<button class="alt" data-a="${i}">${esc(o)}</button>`).join("")}</div>`);
   } else if(c.type==="schaetz"){
     body = `<div class="q"><div class="lab">${esc(c.label)}</div><h2>${esc(c.text)}</h2></div>`
-      + (answered?wait():`<div class="row"><input id="g" type="number" inputmode="decimal" step="any" placeholder="Deine Schätzung${c.unit?" in "+c.unit:""}" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 38%">Abgeben</button></div>`);
+      + (answered?wait():`<div class="row guess"><input id="g" type="number" inputmode="decimal" step="any" placeholder="Deine Schätzung${c.unit?" in "+c.unit:""}" value="${esc(guessVal)}"><button id="gs" style="flex:0 0 38%">Abgeben</button></div>`);
   }
 
   const timerHtml = c.deadline ? `<div class="timer" id="timer"><div class="fill" id="tfill"></div></div><div class="timer-lab" id="tlab"></div>` : "";
@@ -397,6 +416,25 @@ function pop(){
     o.connect(f).connect(g).connect(ac.destination); o.start(t); o.stop(t+0.14);
   }catch{}
 }
+// ---------- Tastatur-Modus ----------
+// Klappt die Handytastatur auf, schrumpft der sichtbare Bereich. Dann wird das Layout kompakt:
+// Bild/Tipps/Zeichnung kleben oben, die Rate-Eingabe unten – kein Scrollen zum Korrigieren nötig.
+function kbInit(){
+  const vv=window.visualViewport; if(!vv) return;
+  const upd=()=>{
+    const kb=Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--vv", vv.height+"px");
+    document.documentElement.style.setProperty("--kb", kb+"px");
+    const tippt=document.activeElement && document.activeElement.tagName==="INPUT";
+    document.body.classList.toggle("kb", kb>120 && !!tippt);
+  };
+  vv.addEventListener("resize",upd); vv.addEventListener("scroll",upd);
+  document.addEventListener("focusin",e=>{ if(e.target.tagName==="INPUT") setTimeout(upd,60); });
+  document.addEventListener("focusout",()=>setTimeout(upd,60));
+  upd();
+}
+kbInit();
+
 document.addEventListener("click",e=>{ if(S && (S.phase==="question"||S.phase==="results") && e.target.closest("button")) pop(); },true);
 
 let audio=null, audioKey=null;
