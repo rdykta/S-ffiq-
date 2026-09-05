@@ -34,19 +34,20 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
 - Timer-Balken läuft von grün über gelb nach rot; wer nicht rechtzeitig antwortet, trinkt 1
 - Jede Runde: eine zufällige Frage, alle antworten auf ihrem Handy
 - Ich hab noch nie: wer's getan hat, trinkt 1
-- Wer würde eher: meistgewählte Person trinkt 2
-- Schätzfrage: am weitesten daneben trinkt 3, zweitweiteste 1
-- Wahrheit oder Pflicht: zufällige Person; kneifen kostet 3
+- Wer würde eher: meistgewählte Person trinkt 1
+- Schätzfrage: am weitesten daneben trinkt 1
+- Wahrheit oder Pflicht: zufällige Person; kneifen kostet 1
 - Entweder oder: Minderheit trinkt 1 (Gleichstand: alle)
 - Trivia: 4 Antworten, wer falsch liegt trinkt 1
 - Wer bin ich?: 4 Tipps im 7-Sekunden-Takt (allgemein → eindeutig), Freitext.
   Falsche Tipps landen im Chat für alle, richtige werden als "[Name] hat es erraten!" gemeldet.
-  Nach dem letzten Tipp bleiben 7 Sekunden. Richtig erraten = 0 Schlücke, nicht erraten = 3.
+  Nach dem letzten Tipp bleiben 7 Sekunden. Richtig erraten = 0 Schlücke, nicht erraten = 1.
+  In der Liste stehen reale Personen und Fantasiefiguren (Gandalf, Harry Potter, Pippi Langstrumpf, James Bond …).
   Nachname reicht, kleine Tippfehler werden toleriert. Wer nah dran ist (Teilwort, Vorname, ähnliche
   Schreibweise), bekommt privat ein "Nah dran!" – in beiden Freitext-Kategorien.
 - Wer bin ich? (Bild): Artikelbild der Person aus der deutschen Wikipedia (Wikimedia Commons, mit Bildnachweis
   in der Auflösung), startet stark verschwommen und wird in 5 Stufen alle 7 Sekunden schärfer. Raten, Chat,
-  "Nah dran" und Schlücke wie bei "Wer bin ich". Eigene Liste in `questions.js` unter `bild`: sehr bekannte,
+  "Nah dran" und Schlücke wie bei "Wer bin ich" (nicht erraten = 1 Schluck). Eigene Liste in `questions.js` unter `bild`: sehr bekannte,
   überwiegend aktuelle Personen (`{ name: "Taylor Swift", alt: ["Swift"] }`), ein paar Weltberühmtheiten der Geschichte
   und bekannte Zeichentrick-, Animations- und Comicfiguren (`{ name: "Homer Simpson", alt: ["Homer"], en: "Homer Simpson" }`).
   Figuren haben in der deutschen Wikipedia meist kein Bild, deshalb kommt ihr Bild über `en` aus der englischen
@@ -56,14 +57,13 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   andere gezogen, es erscheint also nie ein Cover. Bilder selbst prüfen: `npm run bildcheck` erzeugt
   `bildcheck.html` mit allen Figurenbildern zum Durchsehen (`node tools/bildcheck.js alle` nimmt Personen dazu). Der Nachname bzw. die Figur
   allein reicht beim Raten ("Simpson", "Homer").
-- Logo-Quiz: eine Bildmarke ohne Schriftzug (Apfel, Swoosh, Stern, Sirene …) startet verschwommen und wird wie bei
-  "Wer bin ich? (Bild)" in 5 Stufen alle 7 Sekunden schärfer. Raten per Freitext mit Chat und "Nah dran". Nicht erkannt =
-  2 Schlücke, erkannt = 0. Alle Logos sind reine Bildmarken ohne Schriftzug (sonst könnte man den Namen in der letzten
+- Logo-Quiz: eine Bildmarke ohne Schriftzug (Apfel, Swoosh, Stern, Sirene …) wird sofort scharf gezeigt, es gilt die
+  eingestellte Antwortzeit (Standard 30 s). Raten per Freitext mit Chat und "Nah dran". Nicht erkannt = 1 Schluck, erkannt = 0. Alle Logos sind reine Bildmarken ohne Schriftzug (sonst könnte man den Namen in der letzten
   Stufe einfach ablesen) und stecken als Vektorsymbol direkt im Spiel – kein Netzabruf, nichts kann fehlen. Liste in
   `questions.js` unter `logo` (`{ name: "Nike", alt: ["Swoosh"], hex: "111111", path: "…" }`; `path` ist ein SVG-Pfad
   in einer 24x24-Fläche, `hex` die Farbe). Symbole aus dem Simple-Icons-Satz (CC0).
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
-  Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
+  Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 1 Schluck, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.
   Songliste in `questions.js` unter `song` (`{ t: "Titel", a: "Künstler" }`) – Partyhits von den 80ern bis heute,
   nach Jahrzehnten gegliedert, dazu Malle-, Karnevals- und Après-Ski-Klassiker. Geraten wird der Titel.
@@ -77,7 +77,7 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   auf seinem Handy (Farben, Strichstärken, Radierer, alles löschen). Die anderen sehen die Zeichnung live und raten
   per Freitext mit Chat und "Nah dran" wie bei "Wer bin ich"; angezeigt wird nur die Buchstabenzahl. Fester Timer von
   60 Sekunden unabhängig von der Antwortzeit (`DRAW_SEC` in `server.js`), die Runde endet früher, sobald alle es erraten haben. Nicht erraten =
-  2 Schlücke, errät es niemand, trinkt der Zeichner 3. Wortliste in `questions.js` unter `malen`
+  1 Schluck, errät es niemand, trinkt der Zeichner 1. Wortliste in `questions.js` unter `malen`
   (`{ name: "Fahrrad", alt: ["Rad"] }`).
 - Roundmaster kann auswerten, überspringen, Roundmaster übergeben oder
   Spieler rauswerfen. Verlässt der Roundmaster das Spiel, rückt der nächste nach.

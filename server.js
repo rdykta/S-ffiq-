@@ -143,7 +143,7 @@ function publicState(room, forId) {
   if (cur && cur.type === "werbinich") cur = { ...cur, person: undefined, hints: cur.person.hints.slice(0, cur.revealed), hintCount: cur.person.hints.length, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "song") cur = { ...cur, song: undefined, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "bild") cur = { ...cur, person: undefined, page: undefined, stages: BLUR_STAGES, solvedBy: Object.keys(cur.solved || {}) };
-  if (cur && cur.type === "logo") cur = { ...cur, brand: undefined, page: undefined, stages: BLUR_STAGES, solvedBy: Object.keys(cur.solved || {}) };
+  if (cur && cur.type === "logo") cur = { ...cur, brand: undefined, solvedBy: Object.keys(cur.solved || {}) };
   if (cur && cur.type === "malen") cur = { ...cur, word: forId === cur.drawer ? cur.word.name : undefined, wordLen: cur.word.name.length, strokes: undefined, colors: DRAW_COLORS, solvedBy: Object.keys(cur.solved || {}) };
   return {
     code: room.code,
@@ -383,15 +383,15 @@ async function nextRound(room) {
       else { clearInterval(room.hintTimer); room.hintTimer = null; resolve(room); }
     }, HINT_MS);
   }
-  else if (cat === "bild" || cat === "logo") {
-    if (cat === "bild") {
-      cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page; cur.lang = bildPick.lang;
-      cur.fic = !!bildPick.person.en; // Figur: Bild komplett einpassen statt beschneiden
-      cur.text = "Wer bin ich?";
-    } else {
-      cur.brand = logoPick; cur.image = logoImage(logoPick); cur.fic = true;
-      cur.text = "Welche Marke ist das?";
-    }
+  else if (cat === "logo") {
+    // Logo wird sofort scharf gezeigt; es gilt die normale Antwortzeit
+    cur.brand = logoPick; cur.image = logoImage(logoPick); cur.fic = true;
+    cur.text = "Welche Marke ist das?"; cur.chat = []; cur.solved = {};
+  }
+  else if (cat === "bild") {
+    cur.person = bildPick.person; cur.image = bildPick.url; cur.page = bildPick.page; cur.lang = bildPick.lang;
+    cur.fic = !!bildPick.person.en; // Figur: Bild komplett einpassen statt beschneiden
+    cur.text = "Wer bin ich?";
     cur.revealed = 1; cur.chat = []; cur.solved = {};
     cur.deadline = Date.now() + BLUR_STAGES * HINT_MS; cur.total = (BLUR_STAGES * HINT_MS) / 1000;
     const round = room.round;
@@ -430,7 +430,7 @@ async function nextRound(room) {
     cur.text = "Wahrheit oder Pflicht?";
     cur.stage = "choose"; // choose -> task
   }
-  if (room.timerSec > 0 && !["wop", "werbinich", "bild", "malen", "regel", "logo"].includes(cat)) {
+  if (room.timerSec > 0 && !["wop", "werbinich", "bild", "malen", "regel"].includes(cat)) {
     const sec = cat === "schaetz" ? room.timerSec + 10 : cat === "song" ? room.timerSec + 15 : room.timerSec;
     cur.deadline = Date.now() + sec * 1000;
     cur.total = sec;
@@ -461,16 +461,15 @@ function resolve(room) {
     ids.forEach((id) => { count[A[id]] = (count[A[id]] || 0) + 1; });
     const max = Math.max(0, ...Object.values(count));
     const top = Object.keys(count).filter((id) => count[id] === max && P[id]);
-    top.forEach((id) => give(id, 2));
-    res.drinkers = top.map((id) => ({ id, name: P[id].name, n: 2 }));
+    top.forEach((id) => give(id, 1));
+    res.drinkers = top.map((id) => ({ id, name: P[id].name, n: 1 }));
     res.votes = Object.entries(count).filter(([id]) => P[id]).map(([id, n]) => ({ name: P[id].name, n })).sort((a, b) => b.n - a.n);
     res.lines.push(top.length > 1 ? "Gleichstand – alle Erstplatzierten trinken." : "Die Runde hat entschieden.");
   } else if (cur.type === "schaetz") {
     const diffs = ids.map((id) => ({ id, name: P[id].name, guess: A[id], diff: Math.abs(Number(A[id]) - cur.answer) })).sort((a, b) => b.diff - a.diff);
     res.answer = cur.answer; res.unit = cur.unit;
     res.guesses = diffs.slice().reverse();
-    if (diffs[0]) { give(diffs[0].id, 3); res.drinkers.push({ id: diffs[0].id, name: diffs[0].name, n: 3 }); }
-    if (diffs[1] && diffs.length > 2) { give(diffs[1].id, 1); res.drinkers.push({ id: diffs[1].id, name: diffs[1].name, n: 1 }); }
+    if (diffs[0]) { give(diffs[0].id, 1); res.drinkers.push({ id: diffs[0].id, name: diffs[0].name, n: 1 }); }
     if (diffs.length) res.lines.push(`Am nächsten dran: ${diffs[diffs.length - 1].name}.`);
   } else if (cur.type === "oder") {
     const a = ids.filter((id) => A[id] === 0), b = ids.filter((id) => A[id] === 1);
@@ -484,7 +483,7 @@ function resolve(room) {
   } else if (cur.type === "song") {
     res.text = ""; res.answer = cur.song.t; res.artist = cur.song.a; res.chat = cur.chat;
     const connected = room.order.filter((id) => P[id].connected);
-    connected.forEach((id) => { if (!cur.solved[id]) { give(id, 2); res.drinkers.push({ id, name: P[id].name, n: 2 }); } });
+    connected.forEach((id) => { if (!cur.solved[id]) { give(id, 1); res.drinkers.push({ id, name: P[id].name, n: 1 }); } });
     const solvers = connected.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
     res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name}.` : "Keiner hat's erkannt.");
     res.solvers = solvers.map((id) => ({ name: P[id].name }));
@@ -504,12 +503,14 @@ function resolve(room) {
     const connected = room.order.filter((id) => P[id].connected);
     connected.forEach((id) => {
       const sv = cur.solved[id];
-      const n = sv ? 0 : cur.type === "logo" ? 2 : 3;
+      const n = sv ? 0 : 1;
       if (n > 0) { give(id, n); res.drinkers.push({ id, name: P[id].name, n }); }
     });
     const solvers = connected.filter((id) => cur.solved[id]).sort((a, b) => cur.solved[a].t - cur.solved[b].t);
-    const unit = cur.type === "bild" || cur.type === "logo" ? "Stufe" : "Tipp";
-    res.lines.push(solvers.length ? `Am schnellsten: ${P[solvers[0]].name} bei ${unit} ${cur.solved[solvers[0]].hint}.` : "Keiner hat's erraten.");
+    const unit = cur.type === "bild" ? "Stufe" : "Tipp";
+    res.lines.push(!solvers.length ? "Keiner hat's erraten."
+      : cur.type === "logo" ? `Am schnellsten: ${P[solvers[0]].name}.`
+      : `Am schnellsten: ${P[solvers[0]].name} bei ${unit} ${cur.solved[solvers[0]].hint}.`);
     res.solvers = solvers.map((id) => ({ name: P[id].name, hint: cur.solved[id].hint }));
     cur.timedOut = false;
   } else if (cur.type === "malen") {
@@ -519,17 +520,17 @@ function resolve(room) {
     res.solvers = solvers.map((id) => ({ name: P[id].name, sec: cur.solved[id].sec }));
     if (cur.aborted) res.lines.push("Der Zeichner ist abgehauen – keiner trinkt.");
     else {
-      guessers.forEach((id) => { if (!cur.solved[id]) { give(id, 2); res.drinkers.push({ id, name: P[id].name, n: 2 }); } });
+      guessers.forEach((id) => { if (!cur.solved[id]) { give(id, 1); res.drinkers.push({ id, name: P[id].name, n: 1 }); } });
       if (guessers.length && !solvers.length && P[cur.drawer]) {
-        give(cur.drawer, 3); res.drinkers.push({ id: cur.drawer, name: P[cur.drawer].name, n: 3 });
-        res.lines.push(`Keiner hat's erkannt – ${res.drawer} zeichnet wie ein Fuß und trinkt 3.`);
+        give(cur.drawer, 1); res.drinkers.push({ id: cur.drawer, name: P[cur.drawer].name, n: 1 });
+        res.lines.push(`Keiner hat's erkannt – ${res.drawer} zeichnet wie ein Fuß und trinkt 1.`);
       } else if (solvers.length) res.lines.push(`Am schnellsten: ${P[solvers[0]].name} nach ${cur.solved[solvers[0]].sec} s.`);
       else res.lines.push("Keine Rater da – Übungsrunde.");
     }
     cur.timedOut = false;
   } else if (cur.type === "wop") {
     res.text = cur.task || cur.text;
-    if (cur.refused) { give(cur.target, 3); res.drinkers.push({ id: cur.target, name: P[cur.target].name, n: 3 }); res.lines.push(`${P[cur.target].name} hat gekniffen.`); }
+    if (cur.refused) { give(cur.target, 1); res.drinkers.push({ id: cur.target, name: P[cur.target].name, n: 1 }); res.lines.push(`${P[cur.target].name} hat gekniffen.`); }
     else res.lines.push(`${P[cur.target].name} hat's durchgezogen. Respekt.`);
   }
   if (cur.timedOut) {
