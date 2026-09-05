@@ -81,6 +81,9 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   (`{ name: "Fahrrad", alt: ["Rad"] }`).
 - Roundmaster kann auswerten, überspringen, Roundmaster übergeben oder
   Spieler rauswerfen. Verlässt der Roundmaster das Spiel, rückt der nächste nach.
+- Tastatur offen? In allen Rate-Kategorien (Wer bin ich, Bild, Logo, Song, Montagsmaler, Schätzfrage) schaltet die
+  Seite auf ein kompaktes Layout: Tipps, Bild oder Zeichnung bleiben oben sichtbar, das Eingabefeld sitzt direkt über
+  der Tastatur, Kopfzeile und Spielerliste werden ausgeblendet. So kann man tippen und korrigieren, ohne zu scrollen.
 - Jeder Knopfdruck während einer Runde (Antworten, Raten, Zeichenwerkzeuge, Auswerten, Nächste Runde) gibt ein kurzes,
   helles Plopp als Bestätigung. Kommt aus dem Browser selbst (Web Audio), keine Audiodatei nötig; Handy auf lautlos = kein Ton.
 - Handy kurz zu oder Standby? Die App verbindet sich von selbst neu und holt den aktuellen Stand, sobald sie wieder
