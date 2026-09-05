@@ -54,9 +54,10 @@ ob Node.js ins Netzwerk darf – "Zulassen" klicken. Bei manchen Routern
   allein reicht beim Raten ("Simpson", "Homer").
 - Logo-Quiz: eine Bildmarke ohne Schriftzug (Apfel, Swoosh, Stern, Sirene …) startet verschwommen und wird wie bei
   "Wer bin ich? (Bild)" in 5 Stufen alle 7 Sekunden schärfer. Raten per Freitext mit Chat und "Nah dran". Nicht erkannt =
-  2 Schlücke, erkannt = 0. Die Logos kommen von Wikimedia Commons; der Server prüft die Datei vor jeder Runde und
-  überspringt fehlende (bis zu 4 Versuche, sonst andere Kategorie). Liste in `questions.js` unter `logo`
-  (`{ name: "Nike", alt: ["Swoosh"], file: "Logo NIKE.svg" }` – `file` ist der Commons-Dateiname ohne "File:").
+  2 Schlücke, erkannt = 0. Alle Logos sind reine Bildmarken ohne Schriftzug (sonst könnte man den Namen in der letzten
+  Stufe einfach ablesen) und stecken als Vektorsymbol direkt im Spiel – kein Netzabruf, nichts kann fehlen. Liste in
+  `questions.js` unter `logo` (`{ name: "Nike", alt: ["Swoosh"], hex: "111111", path: "…" }`; `path` ist ein SVG-Pfad
+  in einer 24x24-Fläche, `hex` die Farbe). Symbole aus dem Simple-Icons-Satz (CC0).
 - Song-Quiz: 30-Sekunden-Vorschau aus dem iTunes-Katalog (öffentliche Apple-Such-API, kein Key nötig),
   Titel als Freitext mit Chat wie bei "Wer bin ich". Nicht erkannt = 2 Schlücke, erkannt = 0.
   Jedes Handy hat einen Abspielen-Button; am besten spielt der Roundmaster laut vor. Findet der Server keine Vorschau, springt die Runde auf eine andere Kategorie.

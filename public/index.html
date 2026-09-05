@@ -445,7 +445,7 @@ function renderResults(){
       <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
   }
   if(r.type==="werbinich"||r.type==="song"||r.type==="bild"||r.type==="logo"){
-    const credit = r.type==="logo" ? `Logo: Wikimedia Commons, Datei „${esc(r.page||r.answer)}“` : `Bild: ${r.lang==="en"?"englischer":"deutscher"} Wikipedia-Artikel „${esc(r.page||r.answer)}“${r.lang==="en"?"":" (Wikimedia Commons)"}`;
+    const credit = r.type==="logo" ? `Symbol: Simple Icons (CC0)` : `Bild: ${r.lang==="en"?"englischer":"deutscher"} Wikipedia-Artikel „${esc(r.page||r.answer)}“${r.lang==="en"?"":" (Wikimedia Commons)"}`;
     extra = `<div class="card stack">${r.image?`<div class="pic ${r.fic?"fit":""}" style="max-height:38vh"><img src="${esc(r.image)}" alt="" style="transform:none"></div><p class="credit">${credit}</p>`:""}<div class="center"><p>${r.type==="song"||r.type==="logo"?"Das war":"Ich war"}</p><div class="big" style="font-size:clamp(28px,8vw,42px)">${esc(r.answer)}</div>${r.artist?`<p style="margin-top:4px">${esc(r.artist)}</p>`:""}</div>
       ${r.solvers.length?r.solvers.map(sv=>`<div class="bar"><span class="t">${esc(sv.name)}</span><span>${sv.hint?`bei ${r.type==="bild"||r.type==="logo"?"Stufe":"Tipp"} ${sv.hint}`:"✓ erkannt"}</span></div>`).join(""):""}
       <div class="chat">${r.chat.map(m=>m.sys?`<div class="msg sys">${esc(m.text)}</div>`:`<div class="msg"><span class="who">${esc(m.name)}</span><span class="txt">${esc(m.text)}</span></div>`).join("")}</div></div>`;
